@@ -69,7 +69,7 @@ ipykernel>=6.25.0
 ---
 
 ### 👤 Person 1 / Track A: Electronic Structure & Collision Physics
-* **Branch:** `feature/electronic-collision-engine` (branched from `max-dev`)
+* **Branch:** `feature/electronic-collision-engine` (branched from `main`)
 * **Core Ownership:** `src/electronic_structure/`, `src/collision/`, `data/raw_pyscf/`
 
 #### 1.1 Sub-topic: PySCF Multi-Root Calculations & NIST Validation
@@ -94,7 +94,7 @@ ipykernel>=6.25.0
 > 🤖 **Prompt to give to Person 1's AI Agent:**
 > ```text
 > You are working on Track A: Electronic Structure & Collision Physics for the UWPhysics2026 project.
-> Target branch: feature/electronic-collision-engine (base: max-dev).
+> Target branch: feature/electronic-collision-engine (base: main).
 > Environment: Python 3.11 with pyscf>=2.5.0, numpy<2.0.0, scipy>=1.10.0.
 > Your mission:
 > 1. Complete src/electronic_structure/pyscf_runner.py to compute multi-root energies E_i and dipole matrices mu_ij for Be, C2+, and Fe22+, outputting to data/raw_pyscf/manifold_{species}.json.
@@ -106,7 +106,7 @@ ipykernel>=6.25.0
 ---
 
 ### 👤 Person 2 / Track B: Quantum Hamiltonian Mapper & PennyLane Circuits
-* **Branch:** `feature/quantum-circuit-engine` (branched from `max-dev`)
+* **Branch:** `feature/quantum-circuit-engine` (branched from `main`)
 * **Core Ownership:** `src/quantum/mapper.py`, `src/quantum/time_evolution.py`, `tests/test_quantum.py`
 
 #### 2.1 Sub-topic: Multi-State Manifold to Pauli Decomposition
@@ -132,7 +132,7 @@ ipykernel>=6.25.0
 > 🤖 **Prompt to give to Person 2's AI Agent:**
 > ```text
 > You are working on Track B: Quantum Circuit & Pauli Mapper for the UWPhysics2026 project.
-> Target branch: feature/quantum-circuit-engine (base: max-dev).
+> Target branch: feature/quantum-circuit-engine (base: main).
 > Environment: Python 3.11 with pennylane>=0.36.0, numpy<2.0.0, scipy>=1.10.0.
 > Your mission:
 > 1. In src/quantum/mapper.py, map the NxN time-dependent Hamiltonian H(t) into Pauli strings using PennyLane's Pauli decomposition on ceil(log2(N)) qubits.
@@ -144,7 +144,7 @@ ipykernel>=6.25.0
 ---
 
 ### 👤 Person 3 / Track C: Cross-Section Integration, Scaling Laws & UI Dashboard
-* **Branch:** `feature/analysis-scaling-ui` (branched from `max-dev`)
+* **Branch:** `feature/analysis-scaling-ui` (branched from `main`)
 * **Core Ownership:** `src/analysis/`, `app.py`, `notebooks/`, `tests/test_analysis.py`
 
 #### 3.1 Sub-topic: Impact Parameter Integration & Branching Ratios
@@ -178,7 +178,7 @@ ipykernel>=6.25.0
 > 🤖 **Prompt to give to Person 3's AI Agent:**
 > ```text
 > You are working on Track C: Analysis, Scaling Laws & Streamlit UI for the UWPhysics2026 project.
-> Target branch: feature/analysis-scaling-ui (base: max-dev).
+> Target branch: feature/analysis-scaling-ui (base: main).
 > Environment: Python 3.11 with streamlit>=1.30.0, matplotlib>=3.7.0, scipy>=1.10.0, pandas>=2.0.0.
 > Your mission:
 > 1. Complete src/analysis/cross_sections.py to calculate excitation cross-sections sigma_j(E_inc) via impact parameter integration and compute Branching Ratios.
