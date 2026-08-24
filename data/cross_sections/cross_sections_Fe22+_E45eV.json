@@ -1,0 +1,50 @@
+[
+  {
+    "species": "Fe22+",
+    "incident_energy_ev": 45.0,
+    "state_index": 1,
+    "state_label": "state_1",
+    "sigma_au": 2.8107742218683696e-36,
+    "sigma_cm2": 7.870969469191783e-53,
+    "sigma_mb": 7.870969469191782e-35,
+    "branching_ratio": 4.719232541035159e-31,
+    "sigma_trapezoid_au": 3.1602364377218265e-36,
+    "integration_relative_error": 3.4946221585345695e-07,
+    "integration_converged": true,
+    "impact_parameter_min_bohr": 0.5,
+    "impact_parameter_max_bohr": 8.0,
+    "total_excitation_sigma_mb": 0.00016678494650880868
+  },
+  {
+    "species": "Fe22+",
+    "incident_energy_ev": 45.0,
+    "state_index": 2,
+    "state_label": "state_2",
+    "sigma_au": 1.0688755522799646e-44,
+    "sigma_cm2": 2.9931563954534862e-61,
+    "sigma_mb": 2.993156395453486e-43,
+    "branching_ratio": 1.794620232884989e-39,
+    "sigma_trapezoid_au": 1.1892020487857573e-44,
+    "integration_relative_error": 1.2032649650579273e-15,
+    "integration_converged": true,
+    "impact_parameter_min_bohr": 0.5,
+    "impact_parameter_max_bohr": 8.0,
+    "total_excitation_sigma_mb": 0.00016678494650880868
+  },
+  {
+    "species": "Fe22+",
+    "incident_energy_ev": 45.0,
+    "state_index": 3,
+    "state_label": "state_3",
+    "sigma_au": 5.95599855999431e-06,
+    "sigma_cm2": 1.6678494650880867e-22,
+    "sigma_mb": 0.00016678494650880868,
+    "branching_ratio": 1.0,
+    "sigma_trapezoid_au": 5.832643402996478e-06,
+    "integration_relative_error": 0.02071107905001738,
+    "integration_converged": true,
+    "impact_parameter_min_bohr": 0.5,
+    "impact_parameter_max_bohr": 8.0,
+    "total_excitation_sigma_mb": 0.00016678494650880868
+  }
+]
