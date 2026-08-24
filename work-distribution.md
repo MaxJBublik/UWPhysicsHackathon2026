@@ -231,8 +231,6 @@ ipykernel>=6.25.0
 ```mermaid
 gitGraph
    commit id: "Initial Scaffold"
-   branch main
-   checkout main
    commit id: "scaffold & docs"
    
    branch feature/electronic-collision
