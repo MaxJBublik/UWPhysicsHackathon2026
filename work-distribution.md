@@ -231,35 +231,35 @@ ipykernel>=6.25.0
 ```mermaid
 gitGraph
    commit id: "Initial Scaffold"
-   branch max-dev
-   checkout max-dev
+   branch main
+   checkout main
    commit id: "scaffold & docs"
    
    branch feature/electronic-collision
    checkout feature/electronic-collision
    commit id: "pyscf + collision"
    
-   checkout max-dev
+   checkout main
    branch feature/quantum-circuit
    checkout feature/quantum-circuit
    commit id: "pauli mapper + circuit"
    
-   checkout max-dev
+   checkout main
    branch feature/analysis-ui
    checkout feature/analysis-ui
    commit id: "cross sections + app.py"
    
-   checkout max-dev
+   checkout main
    merge feature/electronic-collision
    merge feature/quantum-circuit
    merge feature/analysis-ui
    commit id: "Integration Complete"
 ```
 
-1. **Start from `max-dev`**:
+1. **Start from `main`**:
    ```bash
-   git checkout max-dev
-   git pull origin max-dev
+   git checkout main
+   git pull origin main
    ```
 2. **Create your feature branch**:
    - Person 1: `git checkout -b feature/electronic-collision`
@@ -270,8 +270,8 @@ gitGraph
    git add .
    git commit -m "feat(module): descriptive message"
    ```
-4. **Merge back into `max-dev`**:
+4. **Merge back into `main`**:
    ```bash
-   git checkout max-dev
+   git checkout main
    git merge feature/<your-feature-branch>
    ```
