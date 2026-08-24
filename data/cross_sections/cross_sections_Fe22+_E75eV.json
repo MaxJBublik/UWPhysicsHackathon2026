@@ -1,23 +1,23 @@
 [
   {
     "species": "Fe22+",
-    "incident_energy_ev": 50.0,
+    "incident_energy_ev": 75.0,
     "state_index": 1,
     "state_label": "state_1",
-    "sigma_au": 3.132312898805751e-36,
-    "sigma_cm2": 8.771369469180457e-53,
-    "sigma_mb": 8.771369469180457e-35,
-    "branching_ratio": 5.281433737749894e-31,
-    "sigma_trapezoid_au": 3.5080825182816515e-36,
-    "integration_relative_error": 3.757696194759007e-07,
+    "sigma_au": 2.818576059605961e-36,
+    "sigma_cm2": 7.892816839983219e-53,
+    "sigma_mb": 7.892816839983218e-35,
+    "branching_ratio": 4.857554041804135e-31,
+    "sigma_trapezoid_au": 3.498819533462515e-36,
+    "integration_relative_error": 6.802434738565541e-07,
     "integration_converged": true,
     "impact_parameter_min_bohr": 0.5,
     "impact_parameter_max_bohr": 10.0,
-    "total_excitation_sigma_mb": 0.00016607932437901643
+    "total_excitation_sigma_mb": 0.0001624854149240049
   },
   {
     "species": "Fe22+",
-    "incident_energy_ev": 50.0,
+    "incident_energy_ev": 75.0,
     "state_index": 2,
     "state_label": "state_2",
     "sigma_au": 0.0,
@@ -29,22 +29,22 @@
     "integration_converged": true,
     "impact_parameter_min_bohr": 0.5,
     "impact_parameter_max_bohr": 10.0,
-    "total_excitation_sigma_mb": 0.00016607932437901643
+    "total_excitation_sigma_mb": 0.0001624854149240049
   },
   {
     "species": "Fe22+",
-    "incident_energy_ev": 50.0,
+    "incident_energy_ev": 75.0,
     "state_index": 3,
     "state_label": "state_3",
-    "sigma_au": 5.930800336312169e-06,
-    "sigma_cm2": 1.6607932437901641e-22,
-    "sigma_mb": 0.00016607932437901643,
+    "sigma_au": 5.802459499882618e-06,
+    "sigma_cm2": 1.624854149240049e-22,
+    "sigma_mb": 0.0001624854149240049,
     "branching_ratio": 1.0,
-    "sigma_trapezoid_au": 5.808071659736159e-06,
-    "integration_relative_error": 0.020693442641221037,
+    "sigma_trapezoid_au": 5.687899567900985e-06,
+    "integration_relative_error": 0.019743340213568217,
     "integration_converged": true,
     "impact_parameter_min_bohr": 0.5,
     "impact_parameter_max_bohr": 10.0,
-    "total_excitation_sigma_mb": 0.00016607932437901643
+    "total_excitation_sigma_mb": 0.0001624854149240049
   }
 ]

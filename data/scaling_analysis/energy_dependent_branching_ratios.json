@@ -1,0 +1,310 @@
+{
+  "series": "Beryllium Isoelectronic Sequence",
+  "energy_grid_ev": [
+    15.0,
+    30.0,
+    50.0,
+    75.0,
+    100.0,
+    150.0
+  ],
+  "species_data": {
+    "Be": {
+      "species": "Be",
+      "atomic_number": 4,
+      "charge": 0,
+      "energy_grid_ev": [
+        15.0,
+        30.0,
+        50.0,
+        75.0,
+        100.0,
+        150.0
+      ],
+      "energy_sweep_results": [
+        {
+          "incident_energy_ev": 15.0,
+          "total_excitation_sigma_mb": 1.8453354765412904,
+          "state_cross_sections_mb": {
+            "state_1": 6.1166876529425566e-30,
+            "state_2": 1.3289122198476714e-37,
+            "state_3": 1.8453354765412904
+          },
+          "branching_ratios": {
+            "state_1": 3.3146751529467454e-30,
+            "state_2": 7.20146681587919e-38,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 30.0,
+          "total_excitation_sigma_mb": 1.0610345634425766,
+          "state_cross_sections_mb": {
+            "state_1": 5.072049248181279e-30,
+            "state_2": 9.223161753671281e-38,
+            "state_3": 1.0610345634425766
+          },
+          "branching_ratios": {
+            "state_1": 4.7802865457320974e-30,
+            "state_2": 8.692611976509321e-38,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 50.0,
+          "total_excitation_sigma_mb": 0.6884514079837126,
+          "state_cross_sections_mb": {
+            "state_1": 2.4749450122679523e-30,
+            "state_2": 5.333056879742108e-38,
+            "state_3": 0.6884514079837126
+          },
+          "branching_ratios": {
+            "state_1": 3.594945094987015e-30,
+            "state_2": 7.746453588294901e-38,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 75.0,
+          "total_excitation_sigma_mb": 0.48087048367940183,
+          "state_cross_sections_mb": {
+            "state_1": 1.113969046879147e-30,
+            "state_2": 2.074793042227769e-38,
+            "state_3": 0.48087048367940183
+          },
+          "branching_ratios": {
+            "state_1": 2.3165677343212324e-30,
+            "state_2": 4.3146608341447744e-38,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 100.0,
+          "total_excitation_sigma_mb": 0.3694954158253324,
+          "state_cross_sections_mb": {
+            "state_1": 1.3912127112229369e-30,
+            "state_2": 3.1210501374452067e-38,
+            "state_3": 0.3694954158253324
+          },
+          "branching_ratios": {
+            "state_1": 3.765169070136962e-30,
+            "state_2": 8.446789875521994e-38,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 150.0,
+          "total_excitation_sigma_mb": 0.25151877462290095,
+          "state_cross_sections_mb": {
+            "state_1": 5.226540263482249e-31,
+            "state_2": 9.279032661608802e-39,
+            "state_3": 0.25151877462290095
+          },
+          "branching_ratios": {
+            "state_1": 2.0779920987283505e-30,
+            "state_2": 3.689200806389401e-38,
+            "state_3": 1.0
+          }
+        }
+      ]
+    },
+    "C2+": {
+      "species": "C2+",
+      "atomic_number": 6,
+      "charge": 2,
+      "energy_grid_ev": [
+        15.0,
+        30.0,
+        50.0,
+        75.0,
+        100.0,
+        150.0
+      ],
+      "energy_sweep_results": [
+        {
+          "incident_energy_ev": 15.0,
+          "total_excitation_sigma_mb": 0.13530168505105955,
+          "state_cross_sections_mb": {
+            "state_1": 1.5139453064966607e-31,
+            "state_2": 5.248689545788862e-38,
+            "state_3": 0.13530168505105955
+          },
+          "branching_ratios": {
+            "state_1": 1.1189404669463907e-30,
+            "state_2": 3.8792492080258535e-37,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 30.0,
+          "total_excitation_sigma_mb": 0.11416898334272854,
+          "state_cross_sections_mb": {
+            "state_1": 7.378925065125484e-32,
+            "state_2": 3.7465990062497205e-38,
+            "state_3": 0.11416898334272854
+          },
+          "branching_ratios": {
+            "state_1": 6.46316087704345e-31,
+            "state_2": 3.281625969290321e-37,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 50.0,
+          "total_excitation_sigma_mb": 0.09371174247770611,
+          "state_cross_sections_mb": {
+            "state_1": 9.363425915366856e-32,
+            "state_2": 3.3888430435805704e-38,
+            "state_3": 0.09371174247770611
+          },
+          "branching_ratios": {
+            "state_1": 9.991731737988332e-31,
+            "state_2": 3.616241629896884e-37,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 75.0,
+          "total_excitation_sigma_mb": 0.07609695256385578,
+          "state_cross_sections_mb": {
+            "state_1": 1.1141165235972448e-31,
+            "state_2": 5.955416483012476e-38,
+            "state_3": 0.07609695256385578
+          },
+          "branching_ratios": {
+            "state_1": 1.464075085874626e-30,
+            "state_2": 7.826090641428858e-37,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 100.0,
+          "total_excitation_sigma_mb": 0.06379158677404226,
+          "state_cross_sections_mb": {
+            "state_1": 6.873988550279913e-32,
+            "state_2": 3.2874436316807024e-38,
+            "state_3": 0.06379158677404226
+          },
+          "branching_ratios": {
+            "state_1": 1.0775697702313687e-30,
+            "state_2": 5.153412539062929e-37,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 150.0,
+          "total_excitation_sigma_mb": 0.047823114436164674,
+          "state_cross_sections_mb": {
+            "state_1": 4.293158706367062e-32,
+            "state_2": 2.6402045597980624e-38,
+            "state_3": 0.047823114436164674
+          },
+          "branching_ratios": {
+            "state_1": 8.977162522732942e-31,
+            "state_2": 5.520770846746638e-37,
+            "state_3": 1.0
+          }
+        }
+      ]
+    },
+    "Fe22+": {
+      "species": "Fe22+",
+      "atomic_number": 26,
+      "charge": 22,
+      "energy_grid_ev": [
+        15.0,
+        30.0,
+        50.0,
+        75.0,
+        100.0,
+        150.0
+      ],
+      "energy_sweep_results": [
+        {
+          "incident_energy_ev": 15.0,
+          "total_excitation_sigma_mb": 0.00017119156616388637,
+          "state_cross_sections_mb": {
+            "state_1": 4.887002949026876e-35,
+            "state_2": 0.0,
+            "state_3": 0.00017119156616388637
+          },
+          "branching_ratios": {
+            "state_1": 2.8546984285127775e-31,
+            "state_2": 0.0,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 30.0,
+          "total_excitation_sigma_mb": 0.00016899144180956922,
+          "state_cross_sections_mb": {
+            "state_1": 1.1219916538483821e-34,
+            "state_2": 0.0,
+            "state_3": 0.00016899144180956922
+          },
+          "branching_ratios": {
+            "state_1": 6.639340086302812e-31,
+            "state_2": 0.0,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 50.0,
+          "total_excitation_sigma_mb": 0.00016607932437901643,
+          "state_cross_sections_mb": {
+            "state_1": 8.771369469180457e-35,
+            "state_2": 0.0,
+            "state_3": 0.00016607932437901643
+          },
+          "branching_ratios": {
+            "state_1": 5.281433737749894e-31,
+            "state_2": 0.0,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 75.0,
+          "total_excitation_sigma_mb": 0.0001624854149240049,
+          "state_cross_sections_mb": {
+            "state_1": 7.892816839983218e-35,
+            "state_2": 0.0,
+            "state_3": 0.0001624854149240049
+          },
+          "branching_ratios": {
+            "state_1": 4.857554041804135e-31,
+            "state_2": 0.0,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 100.0,
+          "total_excitation_sigma_mb": 0.0001589553692305554,
+          "state_cross_sections_mb": {
+            "state_1": 1.2290748980884544e-34,
+            "state_2": 0.0,
+            "state_3": 0.0001589553692305554
+          },
+          "branching_ratios": {
+            "state_1": 7.732201208666023e-31,
+            "state_2": 0.0,
+            "state_3": 1.0
+          }
+        },
+        {
+          "incident_energy_ev": 150.0,
+          "total_excitation_sigma_mb": 0.0001521249828048747,
+          "state_cross_sections_mb": {
+            "state_1": 1.1929012317433763e-34,
+            "state_2": 0.0,
+            "state_3": 0.0001521249828048747
+          },
+          "branching_ratios": {
+            "state_1": 7.841586633232151e-31,
+            "state_2": 0.0,
+            "state_3": 1.0
+          }
+        }
+      ]
+    }
+  }
+}
