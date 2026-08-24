@@ -1,236 +1,195 @@
-r"""
-PySCF Electronic Structure Runner for Multi-Root Atomic Manifolds.
+r"""Multi-root active-space electronic-structure calculations with PySCF.
 
-Computes multi-root ground and excited states (E_0, E_1, ..., E_N) and
-the full transition dipole matrix elements (\mu_x, \mu_y, \mu_z) for
-the Be isoelectronic series (Be, C 2+, Fe 22+).
+Values written to JSON are in atomic units unless a field ends in ``_ev``.
+``energies_au`` is the excitation manifold; absolute energies are preserved in
+``total_energies_au`` for ab-initio calculations.
 """
+from __future__ import annotations
 
-import os
-import json
 import argparse
-from typing import Dict, Any, Optional, List
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 
-from src.electronic_structure.species_configs import get_species_config, SPECIES_CONFIGS
+from src.electronic_structure.species_configs import SPECIES_CONFIGS, get_species_config
 
-# Physical constants
 HARTREE_TO_EV = 27.211386245988
 BOHR_TO_ANGSTROM = 0.529177210903
 
 
 class MultiRootElectronicStructure:
-    """
-    Solves multi-root electronic structure for Be-like species using PySCF.
-    Extracts manifold energies and transition dipole matrices.
-    """
+    """Compute a small low-energy manifold for a Be-like atom or ion."""
 
-    def __init__(self, species_key: str, basis: Optional[str] = None, n_states: int = 4):
+    def __init__(self, species_key: str, basis: Optional[str] = None,
+                 n_states: int = 4, *, allow_mock: bool = True,
+                 verbose: int = 0) -> None:
+        if not isinstance(n_states, int) or n_states < 1:
+            raise ValueError("n_states must be a positive integer")
         self.species_config = get_species_config(species_key)
         self.species_key = species_key
         self.basis = basis or self.species_config["recommended_basis"]
         self.n_states = n_states
+        self.allow_mock = allow_mock
+        self.verbose = verbose
         self.results: Optional[Dict[str, Any]] = None
 
     def run_calculation(self) -> Dict[str, Any]:
-        """
-        Executes PySCF SCF + Full CI / CASCI multi-root solver.
-        """
+        """Run RHF followed by multi-root active-space FCI (CASCI)."""
         try:
-            from pyscf import gto, scf, fci, mcscf, ao2mo
+            from pyscf import gto, mcscf, scf
         except ImportError:
-            print("[Warning] PySCF is not installed in the active environment.")
-            print("[Info] Generating analytical/semi-empirical mock manifold for development...")
-            return self._generate_mock_manifold()
+            if not self.allow_mock:
+                raise RuntimeError(
+                    "PySCF is required; install pyscf>=2.5 for an ab-initio manifold"
+                ) from None
+            self.results = self._generate_mock_manifold()
+            return self.results
 
-        symbol = self.species_config["symbol"]
-        charge = self.species_config["charge"]
-        spin = self.species_config["spin"]
-        n_elec = self.species_config["num_electrons"]
-
-        print(f"[*] Building PySCF Molecule: {symbol} (Z={self.species_config['atomic_number']}, Charge={charge}+, Basis={self.basis})")
-        mol = gto.M(
-            atom=f"{symbol} 0.0 0.0 0.0",
-            basis=self.basis,
-            charge=charge,
-            spin=spin,
-            unit="Bohr",
-            verbose=3,
-        )
-
-        # 1. Mean-field calculation (RHF)
-        print("[*] Running Restricted Hartree-Fock (RHF)...")
+        cfg = self.species_config
+        mol = gto.M(atom=[[cfg["symbol"], (0.0, 0.0, 0.0)]], basis=self.basis,
+                    charge=cfg["charge"], spin=cfg["spin"], unit="Bohr",
+                    symmetry=False, verbose=self.verbose)
         mf = scf.RHF(mol)
         mf.conv_tol = 1e-10
+        mf.max_cycle = 200
         mf.kernel()
         if not mf.converged:
-            print("[!] RHF did not converge cleanly; proceeding with current density.")
+            mf = mf.newton()
+            mf.conv_tol = 1e-10
+            mf.kernel()
+        if not mf.converged:
+            raise RuntimeError(f"RHF failed to converge for {self.species_key}")
 
-        # 2. Setup Multi-Root Active Space / FCI
-        norb = mol.nao_nr()
-        n_cas = min(norb, self.species_config["active_orbitals"])
-        nelecas = self.species_config["active_electrons"]
+        ncas = min(int(cfg["active_orbitals"]), mol.nao_nr())
+        nelecas = int(cfg["active_electrons"])
+        if nelecas > mol.nelectron or nelecas > 2 * ncas:
+            raise ValueError("invalid active-space electron/orbital configuration")
+        cas = mcscf.CASCI(mf, ncas, nelecas)
+        cas.fcisolver.nroots = self.n_states
+        cas.fcisolver.conv_tol = 1e-9
+        output = cas.kernel()
+        total_energies = np.atleast_1d(np.asarray(output[0], dtype=float))
+        ci_vectors = [output[2]] if total_energies.size == 1 else list(output[2])
+        if total_energies.size != self.n_states:
+            raise RuntimeError(
+                f"PySCF returned {total_energies.size} roots, expected {self.n_states}"
+            )
 
-        print(f"[*] Solving Multi-Root CI for {self.n_states} roots (norb={norb}, nelec={n_elec})...")
-        cisolver = fci.FCISolver(mol)
-        cisolver.nroots = self.n_states
-        cisolver.conv_tol = 1e-9
-
-        # 1e and 2e integrals in MO basis
-        h1e = mf.mo_coeff.T @ mf.get_hcore() @ mf.mo_coeff
-        g2e = ao2mo.kernel(mol, mf.mo_coeff)
-
-        # Solve for ground and excited states
-        energies_tot, civecs = cisolver.kernel(h1e, g2e, norb, (n_elec // 2, n_elec // 2), ecore=mf.energy_nuc())
-
-        if self.n_states == 1:
-            energies_tot = [energies_tot]
-            civecs = [civecs]
-
-        energies_au = np.array(energies_tot)
-        energies_ev = (energies_au - energies_au[0]) * HARTREE_TO_EV
-
-        # 3. Compute Transition Dipole Moments: <psi_i | r_alpha | psi_j>
-        print("[*] Computing Transition Dipole Moments and 1-TDMs...")
-        dipole_integrals_ao = mol.intor("int1e_r")  # shape: (3, nao, nao) in a.u.
-        dipole_integrals_mo = np.einsum("pi,xpq,qj->xij", mf.mo_coeff, dipole_integrals_ao, mf.mo_coeff)
-
-        dipole_matrix_x = np.zeros((self.n_states, self.n_states))
-        dipole_matrix_y = np.zeros((self.n_states, self.n_states))
-        dipole_matrix_z = np.zeros((self.n_states, self.n_states))
-
+        active_mo = cas.mo_coeff[:, cas.ncore:cas.ncore + ncas]
+        r_ao = mol.intor("int1e_r", comp=3)
+        r_cas = np.einsum("pi,xpq,qj->xij", active_mo, r_ao, active_mo,
+                          optimize=True)
+        dipoles = np.zeros((3, self.n_states, self.n_states), dtype=float)
         for i in range(self.n_states):
-            for j in range(self.n_states):
-                # Compute 1-particle transition reduced density matrix
-                dm1 = cisolver.trans_rdm1(civecs[i], civecs[j], norb, (n_elec // 2, n_elec // 2))
-                dipole_matrix_x[i, j] = np.einsum("pq,pq->", dipole_integrals_mo[0], dm1)
-                dipole_matrix_y[i, j] = np.einsum("pq,pq->", dipole_integrals_mo[1], dm1)
-                dipole_matrix_z[i, j] = np.einsum("pq,pq->", dipole_integrals_mo[2], dm1)
+            for j in range(i, self.n_states):
+                dm1 = cas.fcisolver.trans_rdm1(ci_vectors[i], ci_vectors[j],
+                                                ncas, cas.nelecas)
+                value = np.einsum("xpq,qp->x", r_cas, dm1,
+                                  optimize=True).real
+                dipoles[:, i, j] = value
+                dipoles[:, j, i] = value
 
-        # 4. Oscillator strengths for transitions from ground state (i=0 -> j)
-        oscillator_strengths = []
-        for j in range(self.n_states):
-            if j == 0:
-                oscillator_strengths.append(0.0)
-            else:
-                dE_au = energies_au[j] - energies_au[0]
-                mu_sq = (
-                    dipole_matrix_x[0, j] ** 2
-                    + dipole_matrix_y[0, j] ** 2
-                    + dipole_matrix_z[0, j] ** 2
-                )
-                f_0j = (2.0 / 3.0) * dE_au * mu_sq
-                oscillator_strengths.append(float(f_0j))
+        excitation_au = total_energies - total_energies[0]
+        self.results = self._pack_results(
+            excitation_au, dipoles,
+            self._oscillator_strengths(excitation_au, dipoles),
+            is_mock=False, total_energies_au=total_energies,
+            method="RHF/CASCI",
+            active_space={"orbitals": ncas, "electrons": nelecas})
+        return self.results
 
-        self.results = {
+    @staticmethod
+    def _oscillator_strengths(energies_au: np.ndarray,
+                              dipoles: np.ndarray) -> List[float]:
+        values = (2.0 / 3.0) * energies_au * np.sum(dipoles[:, 0, :] ** 2,
+                                                     axis=0)
+        values[0] = 0.0
+        return values.astype(float).tolist()
+
+    def _pack_results(self, energies_au: np.ndarray, dipoles: np.ndarray,
+                      oscillator_strengths: List[float], *, is_mock: bool,
+                      **metadata: Any) -> Dict[str, Any]:
+        return {
             "species": self.species_key,
             "atomic_number": self.species_config["atomic_number"],
             "charge": self.species_config["charge"],
             "n_states": self.n_states,
             "basis": self.basis,
             "energies_au": energies_au.tolist(),
-            "energies_ev": energies_ev.tolist(),
-            "excitation_energies_ev": energies_ev.tolist(),
-            "dipole_matrix_x": dipole_matrix_x.tolist(),
-            "dipole_matrix_y": dipole_matrix_y.tolist(),
-            "dipole_matrix_z": dipole_matrix_z.tolist(),
+            "energies_ev": (energies_au * HARTREE_TO_EV).tolist(),
+            "excitation_energies_ev": (energies_au * HARTREE_TO_EV).tolist(),
+            "dipole_matrix_x": dipoles[0].tolist(),
+            "dipole_matrix_y": dipoles[1].tolist(),
+            "dipole_matrix_z": dipoles[2].tolist(),
             "oscillator_strengths": oscillator_strengths,
-            "is_mock": False,
+            "is_mock": is_mock,
+            **{key: value.tolist() if isinstance(value, np.ndarray) else value
+               for key, value in metadata.items()},
         }
-        return self.results
 
     def _generate_mock_manifold(self) -> Dict[str, Any]:
-        """
-        Generates physically scaled mock electronic structure data for development
-        when PySCF is not locally installed.
-        Scalings:
-          Delta E ~ Z (valence) to Z^2 (core)
-          Dipole mu ~ 1 / Z
-        """
-        Z = self.species_config["atomic_number"]
-        q = self.species_config["charge"]
-        
-        # Base excitation energies in eV (scaled by Z/4)
-        z_factor = (Z / 4.0)
-        base_ev = np.array([0.0, 5.28 * z_factor, 7.40 * z_factor, 10.8 * z_factor, 14.5 * (z_factor ** 1.2)])[:self.n_states]
-        energies_ev = base_ev
+        """Generate a deterministic, correctly shaped development manifold."""
+        z_factor = self.species_config["atomic_number"] / 4.0
+        index = np.arange(self.n_states, dtype=float)
+        energies_ev = np.where(index == 0, 0.0,
+                               5.28 * z_factor * index ** 0.72)
         energies_au = energies_ev / HARTREE_TO_EV
-
-        # Dipole matrix elements (scale as 1/Z)
-        mu_scale = 1.8 / z_factor
-        dipole_z = np.zeros((self.n_states, self.n_states))
+        dipoles = np.zeros((3, self.n_states, self.n_states), dtype=float)
         for i in range(self.n_states - 1):
-            dipole_z[i, i + 1] = mu_scale * np.sqrt(i + 1) / (i + 2)
-            dipole_z[i + 1, i] = dipole_z[i, i + 1]
+            value = (1.8 / z_factor) * np.sqrt(i + 1) / (i + 2)
+            dipoles[2, i, i + 1] = dipoles[2, i + 1, i] = value
+        return self._pack_results(
+            energies_au, dipoles,
+            self._oscillator_strengths(energies_au, dipoles), is_mock=True,
+            method="scaled-development-manifold")
 
-        dipole_x = np.zeros((self.n_states, self.n_states))
-        dipole_y = np.zeros((self.n_states, self.n_states))
-
-        oscillator_strengths = [0.0]
-        for j in range(1, self.n_states):
-            dE_au = energies_au[j] - energies_au[0]
-            mu_sq = dipole_z[0, j] ** 2
-            f_0j = (2.0 / 3.0) * dE_au * mu_sq
-            oscillator_strengths.append(float(f_0j))
-
-        self.results = {
-            "species": self.species_key,
-            "atomic_number": Z,
-            "charge": q,
-            "n_states": self.n_states,
-            "basis": self.basis,
-            "energies_au": energies_au.tolist(),
-            "energies_ev": energies_ev.tolist(),
-            "excitation_energies_ev": energies_ev.tolist(),
-            "dipole_matrix_x": dipole_x.tolist(),
-            "dipole_matrix_y": dipole_y.tolist(),
-            "dipole_matrix_z": dipole_z.tolist(),
-            "oscillator_strengths": oscillator_strengths,
-            "is_mock": True,
-        }
-        return self.results
-
-    def save_json(self, output_dir: str = "data/raw_pyscf") -> str:
-        """Saves calculation results to a JSON file."""
+    def save_json(self, output_dir: str | Path = "data/raw_pyscf") -> str:
+        """Calculate if necessary and save the manifold JSON."""
         if self.results is None:
             self.run_calculation()
-        os.makedirs(output_dir, exist_ok=True)
-        file_path = os.path.join(output_dir, f"manifold_{self.species_key}.json")
-        with open(file_path, "w") as f:
-            json.dump(self.results, f, indent=2)
-        print(f"[+] Saved electronic structure manifold to: {file_path}")
-        return file_path
+        directory = Path(output_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"manifold_{self.species_key}.json"
+        with path.open("w", encoding="utf-8") as stream:
+            json.dump(self.results, stream, indent=2, allow_nan=False)
+            stream.write("\n")
+        return str(path)
 
 
-def run_all_species(n_states: int = 4, output_dir: str = "data/raw_pyscf") -> List[str]:
-    """Runs calculation for all 3 species in the isoelectronic sequence."""
-    saved_files = []
-    for key in SPECIES_CONFIGS.keys():
-        print(f"\n==================== Running {key} ====================")
-        calc = MultiRootElectronicStructure(species_key=key, n_states=n_states)
-        calc.run_calculation()
-        saved_files.append(calc.save_json(output_dir=output_dir))
-    return saved_files
+def run_all_species(n_states: int = 4,
+                    output_dir: str | Path = "data/raw_pyscf", *,
+                    basis: Optional[str] = None,
+                    allow_mock: bool = True) -> List[str]:
+    """Calculate and save all three supported species."""
+    paths = []
+    for species in SPECIES_CONFIGS:
+        calculation = MultiRootElectronicStructure(
+            species, basis=basis, n_states=n_states, allow_mock=allow_mock)
+        calculation.run_calculation()
+        paths.append(calculation.save_json(output_dir))
+    return paths
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--species", default="Be", choices=[*SPECIES_CONFIGS, "all"])
+    parser.add_argument("--n-states", type=int, default=4)
+    parser.add_argument("--basis")
+    parser.add_argument("--outdir", default="data/raw_pyscf")
+    parser.add_argument("--require-pyscf", action="store_true")
+    args = parser.parse_args()
+    if args.species == "all":
+        run_all_species(args.n_states, args.outdir, basis=args.basis,
+                        allow_mock=not args.require_pyscf)
+    else:
+        calculation = MultiRootElectronicStructure(
+            args.species, basis=args.basis, n_states=args.n_states,
+            allow_mock=not args.require_pyscf)
+        calculation.run_calculation()
+        calculation.save_json(args.outdir)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PySCF Multi-Root Electronic Structure Generator")
-    parser.add_argument(
-        "--species",
-        type=str,
-        default="Be",
-        choices=["Be", "C2+", "Fe22+", "all"],
-        help="Target species to compute (or 'all' for full isoelectronic sequence)",
-    )
-    parser.add_argument("--n-states", type=int, default=4, help="Number of multi-root states (E_0 to E_{N-1})")
-    parser.add_argument("--basis", type=str, default=None, help="Quantum chemistry basis set")
-    parser.add_argument("--outdir", type=str, default="data/raw_pyscf", help="Output directory for JSON results")
-
-    args = parser.parse_args()
-
-    if args.species == "all":
-        run_all_species(n_states=args.n_states, output_dir=args.outdir)
-    else:
-        calc = MultiRootElectronicStructure(species_key=args.species, basis=args.basis, n_states=args.n_states)
-        calc.run_calculation()
-        calc.save_json(output_dir=args.outdir)
+    _main()
