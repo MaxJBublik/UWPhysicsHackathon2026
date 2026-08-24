@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Mapping
+import json
 
 import numpy as np
 import pandas as pd
@@ -70,11 +71,31 @@ def _load_processed_circuit_data(
     processed_data: Mapping[str, Any] | str | Path,
 ) -> dict[str, Any]:
     if isinstance(processed_data, (str, Path)):
-        import json
-
         with Path(processed_data).open("r", encoding="utf-8") as handle:
             return json.load(handle)
     return dict(processed_data)
+
+
+def _write_json_records(frame: pd.DataFrame, output_file: Path) -> None:
+    """Write a DataFrame as a JSON array of records with native Python scalars."""
+
+    records: list[dict[str, Any]] = []
+    for record in frame.reset_index().to_dict(orient="records"):
+        clean_record: dict[str, Any] = {}
+        for key, value in record.items():
+            if value is None:
+                clean_record[key] = None
+            elif isinstance(value, np.generic):
+                native_value = value.item()
+                clean_record[key] = None if pd.isna(native_value) else native_value
+            elif pd.isna(value):
+                clean_record[key] = None
+            else:
+                clean_record[key] = value
+        records.append(clean_record)
+
+    with output_file.open("w", encoding="utf-8") as handle:
+        json.dump(records, handle, indent=2)
 
 
 def calculate_processed_circuit_cross_sections(
@@ -99,8 +120,8 @@ def calculate_processed_circuit_cross_sections(
     Returns
     -------
     pandas.DataFrame
-        DataFrame indexed by excited-state number with cross sections in
-        ``a_0^2``, cm^2, and Mb plus convergence diagnostics.
+        DataFrame indexed by state number with cross sections in ``a_0^2``,
+        cm^2, and Mb plus convergence diagnostics.
     """
 
     sweep = _load_processed_circuit_data(processed_data)
@@ -112,19 +133,15 @@ def calculate_processed_circuit_cross_sections(
             "excitation_probabilities_vs_b must be a mapping of state labels to arrays"
         )
 
-    excited_state_keys = sorted(
-        (
-            key
-            for key in probability_map.keys()
-            if key.startswith("state_") and key != "state_0"
-        ),
+    state_keys = sorted(
+        (key for key in probability_map.keys() if key.startswith("state_")),
         key=lambda item: int(item.split("_", 1)[1]),
     )
-    if not excited_state_keys:
+    if not state_keys:
         raise ValueError("No state_* excitation probabilities were found")
 
     probability_matrix = np.column_stack(
-        [np.asarray(probability_map[key], dtype=float) for key in excited_state_keys]
+        [np.asarray(probability_map[key], dtype=float) for key in state_keys]
     )
 
     sigma_au, sigma_trapezoid, rel_error = _integrate_weighted_probability(
@@ -141,7 +158,7 @@ def calculate_processed_circuit_cross_sections(
 
     frame = pd.DataFrame(
         {
-            "state_label": excited_state_keys,
+            "state_label": state_keys,
             "sigma_au": sigma_au,
             "sigma_cm2": sigma_au * A0_SQ_TO_CM2,
             "sigma_mb": sigma_au * A0_SQ_TO_MB,
@@ -153,7 +170,8 @@ def calculate_processed_circuit_cross_sections(
             "incident_energy_ev": float(sweep["incident_energy_ev"]),
         }
     )
-    frame.insert(0, "state_index", np.arange(1, len(excited_state_keys) + 1, dtype=int))
+    frame.insert(0, "state_index", np.arange(0, len(state_keys), dtype=int))
+
     return frame.set_index("state_index")
 
 
@@ -172,15 +190,102 @@ def save_processed_circuit_cross_sections(
     )
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    frame.reset_index().to_json(output_file, orient="records", indent=2)
+    _write_json_records(frame, output_file)
+    return output_file
+
+
+def calculate_branching_ratios(
+    cross_section_data: pd.DataFrame | Mapping[str, Any] | str | Path,
+) -> pd.DataFrame:
+    r"""Calculate pairwise branching ratios from cross sections.
+
+    The pairwise branching ratio between two states ``i`` and ``j`` is defined
+    here as
+
+    .. math::
+
+       \mathcal{B}_{i\to j}(E_{\mathrm{inc}}) = \frac{\sigma_i(E_{\mathrm{inc}})}{\sigma_j(E_{\mathrm{inc}})}.
+
+    For the Be-like output files this yields columns such as
+    ``branching_ratio_3_2``, ``branching_ratio_3_1``, ``branching_ratio_3_0``,
+    ``branching_ratio_2_1``, ``branching_ratio_2_0``, and
+    ``branching_ratio_1_0``.
+    """
+
+    if isinstance(cross_section_data, pd.DataFrame):
+        frame = cross_section_data.copy()
+    else:
+        if isinstance(cross_section_data, (str, Path)):
+            import json
+
+            with Path(cross_section_data).open("r", encoding="utf-8") as handle:
+                records = json.load(handle)
+        else:
+            records = cross_section_data
+
+        frame = pd.DataFrame(records)
+
+    if "state_index" in frame.columns:
+        frame = frame.set_index("state_index")
+
+    if "sigma_au" not in frame.columns:
+        raise ValueError("cross_section_data must contain a sigma_au column")
+
+    ordered_frame = frame.copy()
+    ordered_frame = ordered_frame.sort_index()
+
+    state_indices = [int(value) for value in ordered_frame.index.to_list()]
+    sigma_values = ordered_frame["sigma_au"].to_numpy(dtype=float)
+
+    result = ordered_frame.copy()
+    result["incident_energy_ev"] = result.get("incident_energy_ev", np.nan)
+
+    for higher_pos, higher_index in enumerate(state_indices):
+        higher_sigma = float(sigma_values[higher_pos])
+        for lower_pos in range(higher_pos):
+            lower_index = state_indices[lower_pos]
+            lower_sigma = float(sigma_values[lower_pos])
+            ratio_column = f"branching_ratio_{higher_index}_{lower_index}"
+            result[ratio_column] = np.nan
+            if lower_sigma > 0.0:
+                result.loc[higher_index, ratio_column] = higher_sigma / lower_sigma
+
+    return result
+
+
+def build_cross_section_records(
+    cross_section_data: pd.DataFrame | Mapping[str, Any] | str | Path,
+) -> pd.DataFrame:
+    """Return cross-section records with branching-ratio columns merged in."""
+
+    return calculate_branching_ratios(cross_section_data)
+
+
+def save_processed_circuit_cross_sections(
+    processed_data: Mapping[str, Any] | str | Path,
+    output_path: Path | str,
+    strict: bool = False,
+    integration_tolerance: float = 5.0e-2,
+) -> Path:
+    """Calculate and save processed-circuit cross sections with branching ratios to JSON."""
+
+    frame = calculate_processed_circuit_cross_sections(
+        processed_data=processed_data,
+        strict=strict,
+        integration_tolerance=integration_tolerance,
+    )
+    frame = build_cross_section_records(frame)
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    _write_json_records(frame, output_file)
     return output_file
 
 
 if __name__ == "__main__":
     default_path = Path("data/processed_circuits/populations_Be_E40eV.json")
     output_path = Path("data/cross_sections/cross_sections_Be_E40eV.json")
-    result = calculate_processed_circuit_cross_sections(default_path)
+    result = build_cross_section_records(calculate_processed_circuit_cross_sections(default_path))
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    result.reset_index().to_json(output_path, orient="records", indent=2)
+    _write_json_records(result, output_path)
     print(f"[+] Saved cross sections to: {output_path}")
     print(result[["state_label", "sigma_au", "sigma_mb", "integration_relative_error", "integration_converged"]])
