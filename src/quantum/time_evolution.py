@@ -315,7 +315,7 @@ class CollisionDynamicsSimulator:
         incident_energy_ev: float,
         t_min_au: float = -15.0,
         t_max_au: float = 15.0,
-        n_time_steps: int = 200,
+        n_time_steps: int = 2000,
         use_trotter: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -379,7 +379,7 @@ class CollisionDynamicsSimulator:
             res = self.run_single_collision(
                 impact_parameter_bohr=b,
                 incident_energy_ev=incident_energy_ev,
-                n_time_steps=120,
+                n_time_steps=2000,
             )
             for i in range(self.mapper.n_states):
                 final_probs[f"state_{i}"].append(res["final_populations"][i])
