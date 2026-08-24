@@ -153,6 +153,8 @@ def calculate_cross_sections_and_branching_ratios(
         [np.asarray(probability_map[key], dtype=float) for key in excited_state_keys]
     )
 
+    probability_matrix = np.clip(probability_matrix, 0.0, 1.0)
+
     sigma_au, sigma_trapezoid, rel_error = _integrate_weighted_probability(
         b_grid=b_grid,
         probabilities=probability_matrix,

@@ -13,8 +13,7 @@ SPECIES_CONFIGS: Dict[str, Dict[str, Any]] = {
         "spin": 0,  # 2S = 0 (singlet ground state)
         "num_electrons": 4,
         "recommended_basis": "cc-pvdz",
-        "active_orbitals": 4,  # e.g., 2s, 2px, 2py, 2pz
-        "active_electrons": 4,
+        "active_orbitals": 2,  # e.g., 2s, 2px, 2py, 2pz
         "plasma_regime": "Low-temperature / Edge Plasma",
         "trajectory_type": "straight_line",
     },
@@ -27,7 +26,7 @@ SPECIES_CONFIGS: Dict[str, Dict[str, Any]] = {
         "num_electrons": 4,
         "recommended_basis": "cc-pvdz",
         "active_orbitals": 4,
-        "active_electrons": 4,
+        "active_electrons": 2,
         "plasma_regime": "Warm / Divertor / Astrophysical Plasma",
         "trajectory_type": "coulomb_hyperbolic",
     },
@@ -40,7 +39,7 @@ SPECIES_CONFIGS: Dict[str, Dict[str, Any]] = {
         "num_electrons": 4,
         "recommended_basis": "def2-tzvp",
         "active_orbitals": 4,
-        "active_electrons": 4,
+        "active_electrons": 2,
         "plasma_regime": "Tokamak Core / Solar Flare / X-Ray Plasma",
         "trajectory_type": "coulomb_hyperbolic",
     },

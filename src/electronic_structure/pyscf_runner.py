@@ -51,7 +51,7 @@ class MultiRootElectronicStructure:
         mol = gto.M(atom=[[cfg["symbol"], (0.0, 0.0, 0.0)]], basis=self.basis,
                     charge=cfg["charge"], spin=cfg["spin"], unit="Bohr",
                     symmetry=False, verbose=self.verbose)
-        mf = scf.RHF(mol)
+        mf = scf.RHF(mol).x2c()
         mf.conv_tol = 1e-10
         mf.max_cycle = 200
         mf.kernel()

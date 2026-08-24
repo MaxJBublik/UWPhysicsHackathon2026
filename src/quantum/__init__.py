@@ -15,7 +15,6 @@ from src.quantum.time_evolution import (
     PennyLaneTimeEvolution,
     simulate_exact_unitary_evolution,
     CollisionDynamicsSimulator,
-    compute_collision_electric_field,
 )
 
 __all__ = [

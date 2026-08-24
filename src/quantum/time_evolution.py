@@ -25,6 +25,15 @@ import os
 import json
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Union
+import concurrent.futures
+from functools import partial
+
+
+from src.collision import (
+    load_manifold,
+    generate_trajectory,
+    electric_field,
+)
 
 from src.quantum.mapper import (
     MultiStatePauliMapper,
@@ -38,69 +47,6 @@ EV_TO_HARTREE = 1.0 / 27.211386245988
 HARTREE_TO_EV = 27.211386245988
 TIME_AU_TO_FEMTOSECONDS = 0.024188843265857
 
-
-# ============================================================================
-# Section 1: Semiclassical Collision Electric Field Generator (Helper)
-# ============================================================================
-
-def compute_collision_electric_field(
-    t_grid_au: np.ndarray,
-    impact_parameter_bohr: float,
-    incident_energy_ev: float,
-    ion_charge: int = 0,
-) -> np.ndarray:
-    r"""
-    Computes the time-dependent electric field vector \vec{\mathcal{E}}(t) in atomic units
-    produced at the atom's origin by a passing electron with impact parameter b
-    and incident kinetic energy E_inc:
-        v = \sqrt{2 * E_inc} (in a.u.)
-        \vec{R}(t) = (b, 0, v * t)
-        \vec{\mathcal{E}}(t) = -e * \vec{R}(t) / |\vec{R}(t)|^3
-
-    Parameters:
-    -----------
-    t_grid_au : np.ndarray
-        Array of time points in atomic units (a.u.).
-    impact_parameter_bohr : float
-        Impact parameter b in Bohr radii (a_0).
-    incident_energy_ev : float
-        Incident electron kinetic energy in eV.
-    ion_charge : int
-        Target charge state (used for Coulomb acceleration correction).
-
-    Returns:
-    --------
-    e_fields : np.ndarray of shape (len(t_grid_au), 3)
-        Electric field vector (Ex, Ey, Ez) at each time step in a.u.
-    """
-    # Electron velocity in atomic units: v = \sqrt{2 * E_kin (Hartree)}
-    e_kin_au = max(incident_energy_ev * EV_TO_HARTREE, 1e-4)
-    v_electron = np.sqrt(2.0 * e_kin_au)
-
-    # Coulomb acceleration / focusing correction for charged ions
-    # At distance r ~ b, effective kinetic energy is enhanced: E_eff ~ E_inc + q / b
-    if ion_charge > 0:
-        coulomb_enhancement = 1.0 + (float(ion_charge) / (max(impact_parameter_bohr, 0.5) * e_kin_au))
-        v_electron *= np.sqrt(coulomb_enhancement)
-
-    b = max(impact_parameter_bohr, 0.1)
-    n_pts = len(t_grid_au)
-    e_fields = np.zeros((n_pts, 3), dtype=float)
-
-    for idx, t in enumerate(t_grid_au):
-        # Straight-line trajectory along z with offset b along x
-        rx = b
-        ry = 0.0
-        rz = v_electron * t
-        r_mag = np.sqrt(rx ** 2 + ry ** 2 + rz ** 2)
-        r_cubed = r_mag ** 3
-
-        # Electric field on the atomic target: \vec{\mathcal{E}} = - \vec{R} / R^3
-        e_fields[idx, 0] = -rx / r_cubed
-        e_fields[idx, 1] = -ry / r_cubed
-        e_fields[idx, 2] = -rz / r_cubed
-
-    return e_fields
 
 
 # ============================================================================
@@ -117,16 +63,19 @@ class PennyLaneTimeEvolution:
         self.n_qubits = mapper.n_qubits
         self.shots = shots
         self.has_pennylane = False
+        self.init_error = None
 
         try:
             import pennylane as qml
             self.qml = qml
             self.has_pennylane = True
             # Setup PennyLane device (default.qubit)
-            self.dev = qml.device("default.qubit", wires=self.n_qubits, shots=shots)
-        except ImportError:
+            self.dev = qml.device("lightning.qubit", wires=self.n_qubits, shots=shots)
+        except Exception as e:
             self.qml = None
             self.dev = None
+            self.has_pennylane = False
+            self.init_error = str(e)
 
     def _apply_trotter_step_pennylane(self, coeffs: np.ndarray, pauli_strings: List[str], dt_au: float):
         r"""
@@ -181,39 +130,35 @@ class PennyLaneTimeEvolution:
             State populations |c_j(t)|^2 across all computational basis states.
         """
         if not self.has_pennylane:
-            # If PennyLane is not installed, use the exact reference statevector propagator
+            print(f"[WARNING] PennyLane unavailable ({self.init_error}). Reverting to exact matrix exponential simulation.")
             return simulate_exact_unitary_evolution(self.mapper, t_grid_au, e_fields_au)
 
-        qml = self.qml
-        n_steps = len(t_grid_au)
-        dt_au = t_grid_au[1] - t_grid_au[0] if n_steps > 1 else 0.1
-        dim = 2 ** self.n_qubits
+        try:
+            qml = self.qml
+            n_steps = len(t_grid_au)
+            dt_au = t_grid_au[1] - t_grid_au[0] if n_steps > 1 else 0.1
+            dim = 2 ** self.n_qubits
 
-        populations = np.zeros((n_steps, dim), dtype=float)
+            populations = np.zeros((n_steps, dim), dtype=float)
 
-        # Build progressive Trotter circuits for each time step
-        # Note: In PennyLane, we construct a QNode that steps up to time index k
-        @qml.qnode(self.dev)
-        def circuit_at_step(step_index: int):
-            # 1. State preparation: initialize in ground state |0...0> (E_0)
-            # Default qubit state is |00...0>
-            
-            # 2. Sequential Trotter evolution up to step_index
-            for k in range(step_index):
-                coeffs_k, paulis_k = self.mapper.evaluate_hamiltonian_paulis_at_t(e_fields_au[k])
-                self._apply_trotter_step_pennylane(coeffs_k, paulis_k, dt_au)
-            
-            # 3. Measurement: state probabilities across computational basis
-            return qml.probs(wires=range(self.n_qubits))
+            @qml.qnode(self.dev)
+            def circuit_at_step(step_index: int):
+                for k in range(step_index):
+                    coeffs_k, paulis_k = self.mapper.evaluate_hamiltonian_paulis_at_t(e_fields_au[k])
+                    self._apply_trotter_step_pennylane(coeffs_k, paulis_k, dt_au)
+                return qml.probs(wires=range(self.n_qubits))
 
-        # Initial state at t = t_grid[0]
-        populations[0, 0] = 1.0
+            populations[0, 0] = 1.0
 
-        for step in range(1, n_steps):
-            probs = circuit_at_step(step)
-            populations[step, :] = np.array(probs)
+            for step in range(1, n_steps):
+                probs = circuit_at_step(step)
+                populations[step, :] = np.array(probs)
 
-        return populations
+            return populations
+
+        except Exception as e:
+            print(f"[WARNING] PennyLane circuit execution failed with error ({e}). Reverting to exact matrix exponential simulation.")
+            return simulate_exact_unitary_evolution(self.mapper, t_grid_au, e_fields_au)
 
 
 # ============================================================================
@@ -285,7 +230,19 @@ def simulate_exact_unitary_evolution(
 # ============================================================================
 # Section 4: High-Level Population Simulation Runner & Batch Sweeper
 # ============================================================================
-
+def _parallel_worker(args: tuple):
+    """Standalone worker to prevent pickling unpicklable module attributes."""
+    json_path, b, energy, use_trotter = args
+    
+    # Instantiate a fresh simulator inside the child process
+    local_sim = CollisionDynamicsSimulator(json_path)
+    
+    return local_sim.run_single_collision(
+        impact_parameter_bohr=b,
+        incident_energy_ev=energy,
+        n_time_steps=500,
+        use_trotter=use_trotter
+    )
 class CollisionDynamicsSimulator:
     """
     End-to-end simulation runner for electron-impact collisional excitation.
@@ -297,9 +254,12 @@ class CollisionDynamicsSimulator:
         use_pennylane_if_available: bool = True,
         unphysical_penalty_ev: float = 100.0,
     ):
-        with open(manifold_json_path, "r") as f:
-            self.manifold_data = json.load(f)
-
+        self.manifold_json_path = manifold_json_path
+        
+        
+        self.manifold_data = load_manifold(manifold_json_path)
+        # ----------------
+        
         self.species = self.manifold_data["species"]
         self.charge = self.manifold_data.get("charge", 0)
         self.mapper = MultiStatePauliMapper(
@@ -315,8 +275,8 @@ class CollisionDynamicsSimulator:
         incident_energy_ev: float,
         t_min_au: float = -15.0,
         t_max_au: float = 15.0,
-        n_time_steps: int = 2000,
-        use_trotter: bool = False,
+        n_time_steps: int = 500,
+        use_trotter: bool = True,
     ) -> Dict[str, Any]:
         """
         Simulates a single collision event with specified impact parameter and energy.
@@ -327,16 +287,29 @@ class CollisionDynamicsSimulator:
             Dictionary containing time grid, electric fields, and state populations.
         """
         t_grid = np.linspace(t_min_au, t_max_au, n_time_steps)
-        e_fields = compute_collision_electric_field(
-            t_grid_au=t_grid,
+        
+        # --- NEW CODE ---
+        # 1. Determine trajectory type based on ion charge
+        traj_type = "coulomb" if self.charge > 0 else "straight"
+        
+        # 2. Generate the physical trajectory (R(t))
+        trajectory = generate_trajectory(
+            time=t_grid,
             impact_parameter_bohr=impact_parameter_bohr,
             incident_energy_ev=incident_energy_ev,
-            ion_charge=self.charge,
+            trajectory_type=traj_type,
+            ion_charge=self.charge
         )
+        
+        # 3. Calculate the electric field vectors from the trajectory positions
+        e_fields = electric_field(trajectory.position)
+        # ----------------
 
         if use_trotter and self.pennylane_engine is not None and self.pennylane_engine.has_pennylane:
+            print("[*] Using PennyLane Trotterized circuit for time evolution.")
             populations_all = self.pennylane_engine.simulate_trotter_trajectory(t_grid, e_fields)
         else:
+            print("[!] PennyLane not available or Trotter disabled. Using exact matrix exponential propagation.")
             populations_all = simulate_exact_unitary_evolution(self.mapper, t_grid, e_fields)
 
         # Extract only physical manifold states (0 to N-1)
@@ -367,20 +340,26 @@ class CollisionDynamicsSimulator:
         b_max_bohr: float = 10.0,
         n_b_points: int = 25,
         output_dir: str = "data/processed_circuits",
+        use_trotter: bool = True, 
     ) -> Dict[str, Any]:
-        """
-        Sweeps impact parameter b over [b_min, b_max] to compute excitation probabilities P_{0->j}(b).
-        Saves results to JSON for downstream cross-section integration (Track C).
-        """
+        
         b_grid = np.linspace(b_min_bohr, b_max_bohr, n_b_points)
         final_probs = {f"state_{i}": [] for i in range(self.mapper.n_states)}
 
-        for b in b_grid:
-            res = self.run_single_collision(
-                impact_parameter_bohr=b,
-                incident_energy_ev=incident_energy_ev,
-                n_time_steps=2000,
-            )
+        # Package the arguments for each child process
+        worker_args = [
+            (self.manifold_json_path, b, incident_energy_ev, use_trotter) 
+            for b in b_grid
+        ]
+
+        print(f"[*] Running {n_b_points} parallel collision simulations...")
+        
+        # Use the top-level function for mapping
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            results = list(executor.map(_parallel_worker, worker_args))
+
+        # Reassemble the results in order
+        for res in results:
             for i in range(self.mapper.n_states):
                 final_probs[f"state_{i}"].append(res["final_populations"][i])
 
@@ -414,7 +393,7 @@ def run_all_species_simulation(energy_ev: float = 50.0):
         if os.path.exists(path):
             print(f"\n================ Running Collision Dynamics for {sp} ================")
             sim = CollisionDynamicsSimulator(path)
-            res = sim.run_single_collision(impact_parameter_bohr=2.0, incident_energy_ev=energy_ev)
+            res = sim.run_single_collision(impact_parameter_bohr=2.0, incident_energy_ev=energy_ev, use_trotter=True)
             print(f"[*] Final Populations for {sp} (b=2.0 a0, E={energy_ev} eV):")
             for idx, p in enumerate(res["final_populations"]):
                 print(f"    State {idx}: {p * 100:.2f}%")

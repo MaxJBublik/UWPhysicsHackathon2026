@@ -207,7 +207,7 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
             marker=markers.get(sp, "o"),
             linewidth=2,
         )
-
+    ax1.set_yscale("log")
     ax1.set_xlabel("Incident Electron Energy (eV)", fontsize=12)
     ax1.set_ylabel(r"Total Excitation Cross-Section $\sigma_{\mathrm{tot}}$ (Mb)", fontsize=12)
     ax1.set_title("Isoelectronic Cross-Section Scaling", fontsize=13, fontweight="bold")
@@ -217,7 +217,7 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
     # Plot 2: Branching Ratio to State 1 vs Incident Energy
     for sp, sp_data in species_dict.items():
         energies = [r["incident_energy_ev"] for r in sp_data["energy_sweep_results"]]
-        br1 = [r["branching_ratios"].get("state_1", 1.0) * 100 for r in sp_data["energy_sweep_results"]]
+        br1 = [r["branching_ratios"].get("state_1", 0) * 100 for r in sp_data["energy_sweep_results"]]
         ax2.plot(
             energies,
             br1,
