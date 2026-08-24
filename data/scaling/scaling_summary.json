@@ -1,0 +1,224 @@
+{
+  "species": [
+    "Be",
+    "C2+",
+    "Fe22+"
+  ],
+  "per_state_table": [
+    {
+      "species": "Be",
+      "Z": 4,
+      "charge": 0,
+      "state_index": 1,
+      "delta_E_ev": 2.85053257831966,
+      "mu_au": 0.0,
+      "sigma_au": 0.0024775912,
+      "E_inc_ev": 40.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "Be",
+      "Z": 4,
+      "charge": 0,
+      "state_index": 2,
+      "delta_E_ev": 2.850532578320385,
+      "mu_au": 0.0,
+      "sigma_au": 1.36e-08,
+      "E_inc_ev": 40.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "Be",
+      "Z": 4,
+      "charge": 0,
+      "state_index": 3,
+      "delta_E_ev": 5.788857903228255,
+      "mu_au": 1.9536051267384225,
+      "sigma_au": 0.0,
+      "E_inc_ev": 40.0,
+      "converged": false,
+      "is_dominant": true
+    },
+    {
+      "species": "Be",
+      "Z": 4,
+      "charge": 0,
+      "state_index": 1,
+      "delta_E_ev": 2.85053257831966,
+      "mu_au": 0.0,
+      "sigma_au": 0.0033619624,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "Be",
+      "Z": 4,
+      "charge": 0,
+      "state_index": 2,
+      "delta_E_ev": 2.850532578320385,
+      "mu_au": 0.0,
+      "sigma_au": 1.2e-08,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "Be",
+      "Z": 4,
+      "charge": 0,
+      "state_index": 3,
+      "delta_E_ev": 5.788857903228255,
+      "mu_au": 1.9536051267384225,
+      "sigma_au": 0.0,
+      "E_inc_ev": 50.0,
+      "converged": false,
+      "is_dominant": true
+    },
+    {
+      "species": "C2+",
+      "Z": 6,
+      "charge": 2,
+      "state_index": 1,
+      "delta_E_ev": 6.571328531255247,
+      "mu_au": 0.0,
+      "sigma_au": 0.0010336398,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "C2+",
+      "Z": 6,
+      "charge": 2,
+      "state_index": 2,
+      "delta_E_ev": 6.571328531255827,
+      "mu_au": 0.0,
+      "sigma_au": 1.4e-09,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "C2+",
+      "Z": 6,
+      "charge": 2,
+      "state_index": 3,
+      "delta_E_ev": 13.651991769385198,
+      "mu_au": 0.9329698456373493,
+      "sigma_au": 5.425669018e-16,
+      "E_inc_ev": 50.0,
+      "converged": false,
+      "is_dominant": true
+    },
+    {
+      "species": "Fe22+",
+      "Z": 26,
+      "charge": 22,
+      "state_index": 1,
+      "delta_E_ev": 43.80436521798362,
+      "mu_au": 0.0,
+      "sigma_au": 9.0808e-06,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "Fe22+",
+      "Z": 26,
+      "charge": 22,
+      "state_index": 2,
+      "delta_E_ev": 43.80436521802693,
+      "mu_au": 0.0,
+      "sigma_au": 0.0,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": false
+    },
+    {
+      "species": "Fe22+",
+      "Z": 26,
+      "charge": 22,
+      "state_index": 3,
+      "delta_E_ev": 82.88056190733217,
+      "mu_au": 0.16018260468491693,
+      "sigma_au": 1.792226501e-21,
+      "E_inc_ev": 50.0,
+      "converged": true,
+      "is_dominant": true
+    }
+  ],
+  "energy_scaling": {
+    "points": [
+      {
+        "species": "Be",
+        "Z": 4,
+        "delta_E_ev": 5.788857903228255
+      },
+      {
+        "species": "C2+",
+        "Z": 6,
+        "delta_E_ev": 13.651991769385198
+      },
+      {
+        "species": "Fe22+",
+        "Z": 26,
+        "delta_E_ev": 82.88056190733217
+      }
+    ],
+    "fit": {
+      "alpha": 1.3705580924787941,
+      "prefactor": 0.988764604979097,
+      "r_squared": 0.9870769943969531
+    }
+  },
+  "dipole_scaling": {
+    "points": [
+      {
+        "species": "Be",
+        "Z": 4,
+        "mu_au": 1.9536051267384225
+      },
+      {
+        "species": "C2+",
+        "Z": 6,
+        "mu_au": 0.9329698456373493
+      },
+      {
+        "species": "Fe22+",
+        "Z": 26,
+        "mu_au": 0.16018260468491693
+      }
+    ],
+    "fit": {
+      "alpha": -1.3002379244691036,
+      "prefactor": 10.795470742736525,
+      "r_squared": 0.9929032048839668
+    }
+  },
+  "coulomb_focusing": [
+    {
+      "species": "C2+",
+      "Z": 6,
+      "E_inc_ev": 50.0,
+      "sigma_total_au": 0.0010336412000000001,
+      "sigma_reference_total_au": 0.0033619744000000003,
+      "ratio": 0.3074506456682121,
+      "reliable": false
+    },
+    {
+      "species": "Fe22+",
+      "Z": 26,
+      "E_inc_ev": 50.0,
+      "sigma_total_au": 9.080800000000001e-06,
+      "sigma_reference_total_au": 0.0033619744000000003,
+      "ratio": 0.0027010318698441013,
+      "reliable": false
+    }
+  ],
+  "caveats": [
+    "3 cross-section rows have non-converged impact-parameter integration and are unreliable."
+  ]
+}
