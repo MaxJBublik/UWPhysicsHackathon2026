@@ -28,7 +28,7 @@ def electric_field(position: ArrayLike, *,
     radius_squared = np.sum(points * points, axis=-1) + softening_bohr**2
     if np.any(radius_squared == 0):
         raise ValueError("electric field is singular at R=0; use softening_bohr")
-    field = -points / radius_squared[..., None] ** 1.5
+    field = points / radius_squared[..., None] ** 1.5
     return field[0] if scalar else field
 
 

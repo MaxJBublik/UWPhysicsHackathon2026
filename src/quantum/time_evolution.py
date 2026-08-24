@@ -42,6 +42,8 @@ from src.quantum.mapper import (
     reconstruct_matrix_from_paulis,
 )
 
+from src.collision.trajectories import incident_velocity, TrajectoryResult
+
 # Physical conversion factors (Atomic units: \hbar = m_e = e = 1)
 EV_TO_HARTREE = 1.0 / 27.211386245988
 HARTREE_TO_EV = 27.211386245988
@@ -77,20 +79,19 @@ class PennyLaneTimeEvolution:
             self.has_pennylane = False
             self.init_error = str(e)
 
-    def _apply_trotter_step_pennylane(self, coeffs: np.ndarray, pauli_strings: List[str], dt_au: float):
+    def _apply_trotter_step_pennylane(self, coeffs: np.ndarray, pauli_strings: List[str], dt_h: float):
         r"""
         Applies a single Trotter slice: \prod_k \exp(-i * c_k * \hat{P}_k * \Delta t)
         using PennyLane parameterized Pauli rotation gates (qml.PauliRot).
         """
         qml = self.qml
         # In a.u., Hamiltonian energy in eV must be converted to a.u. for time propagation
-        dt_scaled = dt_au * EV_TO_HARTREE
 
         for c, p_str in zip(coeffs, pauli_strings):
             if abs(c) < 1e-8:
                 continue
             # PennyLane qml.PauliRot applies exp(-i * theta / 2 * P), so theta = 2 * c * dt
-            theta = 2.0 * float(c) * dt_scaled
+            theta = 2.0 * float(c) * dt_h
             
             # Check if all Identity
             if all(char == "I" for char in p_str):
@@ -190,10 +191,8 @@ def simulate_exact_unitary_evolution(
     """
     n_steps = len(t_grid_au)
     dt_au = t_grid_au[1] - t_grid_au[0] if n_steps > 1 else 0.1
-    dt_scaled = dt_au * EV_TO_HARTREE
     dim = 2 ** mapper.n_qubits
 
-    # Statevector initialized to ground state |0...0>
     psi = np.zeros(dim, dtype=complex)
     psi[0] = 1.0 + 0.0j
 
@@ -201,27 +200,21 @@ def simulate_exact_unitary_evolution(
     populations[0, :] = np.abs(psi) ** 2
 
     for k in range(n_steps - 1):
-        # 1. Evaluate Hamiltonian at current time slice in eV
         coeffs_k, paulis_k = mapper.evaluate_hamiltonian_paulis_at_t(e_fields_au[k])
-        H_k_ev = reconstruct_matrix_from_paulis(coeffs_k.tolist(), paulis_k)
+        H_k_au = reconstruct_matrix_from_paulis(coeffs_k.tolist(), paulis_k)
 
-        # 2. Diagonalize H_k for stable, exact unitary matrix exponentiation:
-        # exp(-i * H * dt) = V * diag(exp(-i * lambda * dt)) * V^\dagger
-        eigenvalues, eigenvectors = np.linalg.eigh(H_k_ev)
+        eigenvalues, eigenvectors = np.linalg.eigh(H_k_au)
         
-        # Convert eigenvalues to a.u. for time propagation
-        phase_factors = np.exp(-1j * eigenvalues * dt_scaled)
+        # Propagate directly with dt_au (no EV_TO_HARTREE scaling)
+        phase_factors = np.exp(-1j * eigenvalues * dt_au)
         U_step = eigenvectors @ np.diag(phase_factors) @ eigenvectors.conj().T
 
-        # 3. Propagate statevector
         psi = U_step @ psi
 
-        # Normalize statevector to guarantee strict numerical unitarity
         norm = np.linalg.norm(psi)
         if norm > 1e-12:
             psi = psi / norm
 
-        # 4. Measure state populations
         populations[k + 1, :] = np.abs(psi) ** 2
 
     return populations
@@ -286,9 +279,13 @@ class CollisionDynamicsSimulator:
         result : Dict[str, Any]
             Dictionary containing time grid, electric fields, and state populations.
         """
-        t_grid = np.linspace(t_min_au, t_max_au, n_time_steps)
+
+        v_au = incident_velocity(incident_energy_ev)
+        t_boundary = max(15.0, 30.0 / v_au)
+
+        t_grid = np.linspace(-t_boundary, t_boundary, n_time_steps)
         
-        # --- NEW CODE ---
+        
         # 1. Determine trajectory type based on ion charge
         traj_type = "coulomb" if self.charge > 0 else "straight"
         
@@ -302,7 +299,7 @@ class CollisionDynamicsSimulator:
         )
         
         # 3. Calculate the electric field vectors from the trajectory positions
-        e_fields = electric_field(trajectory.position)
+        e_fields = electric_field(trajectory.position, softening_bohr=0.2)
         # ----------------
 
         if use_trotter and self.pennylane_engine is not None and self.pennylane_engine.has_pennylane:
@@ -408,7 +405,7 @@ if __name__ == "__main__":
     parser.add_argument("--species", type=str, default="Be", choices=["Be", "C2+", "Fe22+", "all"])
     parser.add_argument("--energy", type=float, default=50.0, help="Incident electron kinetic energy in eV")
     parser.add_argument("--impact-b", type=float, default=2.0, help="Impact parameter in Bohr (a_0)")
-    parser.add_argument("--use-trotter", action="store_true", help="Use PennyLane Trotter circuit")
+    parser.add_argument("--use-trotter", action="store_false", help="Use PennyLane Trotter circuit")
 
     args = parser.parse_args()
 

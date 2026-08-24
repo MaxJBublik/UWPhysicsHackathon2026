@@ -28,6 +28,8 @@ PAULI_X = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=complex)
 PAULI_Y = np.array([[0.0, -1.0j], [1.0j, 0.0]], dtype=complex)
 PAULI_Z = np.array([[1.0, 0.0], [0.0, -1.0]], dtype=complex)
 
+HARTREE_TO_EV = 27.211386245988
+
 PAULI_DICT = {
     "I": PAULI_I,
     "X": PAULI_X,
@@ -207,54 +209,47 @@ class MultiStatePauliMapper:
     """
 
     def __init__(self, manifold_data: Dict[str, Any], unphysical_penalty_ev: float = 100.0):
-        """
-        Initializes the mapper using a PySCF manifold JSON dictionary.
-
-        Parameters:
-        -----------
-        manifold_data : Dict[str, Any]
-            Dictionary loaded from data/raw_pyscf/manifold_{species}.json
-        unphysical_penalty_ev : float
-            Energy penalty (in eV) placed on unused qubit states.
-        """
-        self.species = manifold_data["species"]
-        self.n_states = manifold_data["n_states"]
+        self.species = manifold_data.get("species", "Unknown")
+        self.n_states = manifold_data.get("n_states", len(manifold_data.get("energies_au", [])))
         self.n_qubits = get_n_qubits(self.n_states)
-        self.unphysical_penalty_ev = unphysical_penalty_ev
+        
+        # 1. Convert penalty to atomic units (Hartree)
+        self.unphysical_penalty_au = unphysical_penalty_ev / HARTREE_TO_EV
 
-        # 1. Unperturbed diagonal atomic Hamiltonian H_0 = diag(E_0, ..., E_{N-1})
-        energies_ev = np.array(manifold_data["excitation_energies_ev"], dtype=float)
-        self.H0_matrix = np.diag(energies_ev)
+        # 2. Robustly extract energies in Hartree
+        if "energies_au" in manifold_data:
+            energies_au = np.array(manifold_data["energies_au"], dtype=float)
+        elif "excitation_energies_ev" in manifold_data:
+            energies_au = np.array(manifold_data["excitation_energies_ev"], dtype=float) / HARTREE_TO_EV
+        else:
+            raise KeyError("Manifold data must contain 'energies_au' or 'excitation_energies_ev'.")
 
-        # 2. Transition dipole matrices in atomic units (e * a_0)
+        self.H0_matrix = np.diag(energies_au)
+
+        # 3. Transition dipole matrices in atomic units
         self.mux_matrix = np.array(manifold_data["dipole_matrix_x"], dtype=float)
         self.muy_matrix = np.array(manifold_data["dipole_matrix_y"], dtype=float)
         self.muz_matrix = np.array(manifold_data["dipole_matrix_z"], dtype=float)
 
-        # 3. Pre-decompose static H0 and dipole operators into Pauli basis
-        # This allows computing H(t) = H0 - mu . E(t) via linear combination of coefficients!
         self._precompute_pauli_basis()
 
     def _precompute_pauli_basis(self):
-        """
-        Pre-computes Pauli representations for H0, mux, muy, muz.
-        """
+        # Pass converted unphysical_penalty_au instead of eV
         self.h0_coeffs, self.h0_paulis = decompose_matrix_to_paulis(
-            self.H0_matrix, n_qubits=self.n_qubits, unphysical_penalty=self.unphysical_penalty_ev
+            self.H0_matrix, n_qubits=self.n_qubits, unphysical_penalty=self.unphysical_penalty_au
         )
         self.mux_coeffs, self.mux_paulis = decompose_matrix_to_paulis(self.mux_matrix, n_qubits=self.n_qubits)
         self.muy_coeffs, self.muy_paulis = decompose_matrix_to_paulis(self.muy_matrix, n_qubits=self.n_qubits)
         self.muz_coeffs, self.muz_paulis = decompose_matrix_to_paulis(self.muz_matrix, n_qubits=self.n_qubits)
 
-        # Union of all active Pauli strings across H0 and dipoles
         all_active_paulis = set(self.h0_paulis) | set(self.mux_paulis) | set(self.muy_paulis) | set(self.muz_paulis)
         self.active_paulis = sorted(list(all_active_paulis))
 
-        # Build coefficient lookup vectors indexed by active_paulis
         self.vec_h0 = np.array([self._get_coeff(p, self.h0_coeffs, self.h0_paulis) for p in self.active_paulis])
         self.vec_mux = np.array([self._get_coeff(p, self.mux_coeffs, self.mux_paulis) for p in self.active_paulis])
         self.vec_muy = np.array([self._get_coeff(p, self.muy_coeffs, self.muy_paulis) for p in self.active_paulis])
         self.vec_muz = np.array([self._get_coeff(p, self.muz_coeffs, self.muz_paulis) for p in self.active_paulis])
+
 
     @staticmethod
     def _get_coeff(pauli_str: str, coeffs: List[float], paulis: List[str]) -> float:
@@ -287,10 +282,6 @@ class MultiStatePauliMapper:
         return coeffs_t, self.active_paulis
 
     def to_pennylane_hamiltonian(self, coefficients: np.ndarray, pauli_strings: List[str]):
-        """
-        Converts the decomposed Pauli strings into a native PennyLane Hamiltonian / LinearCombination.
-        Safe to call with or without PennyLane installed (returns tuple fallback if uninstalled).
-        """
         try:
             import pennylane as qml
 
@@ -298,16 +289,15 @@ class MultiStatePauliMapper:
             for p_str in pauli_strings:
                 op_terms = []
                 for wire_idx, char in enumerate(p_str):
-                    if char == "I":
-                        op_terms.append(qml.Identity(wire_idx))
-                    elif char == "X":
+                    if char == "X":
                         op_terms.append(qml.PauliX(wire_idx))
                     elif char == "Y":
                         op_terms.append(qml.PauliY(wire_idx))
                     elif char == "Z":
                         op_terms.append(qml.PauliZ(wire_idx))
+                    elif char == "I":
+                        op_terms.append(qml.Identity(wire_idx))
 
-                # Combine single-qubit operators into a tensor product
                 if len(op_terms) == 1:
                     obs_list.append(op_terms[0])
                 else:
@@ -316,9 +306,9 @@ class MultiStatePauliMapper:
                         obs = obs @ term
                     obs_list.append(obs)
 
-            return qml.Hamiltonian(coefficients.tolist(), obs_list)
+            # Modern PennyLane operator combination
+            return qml.dot(coefficients.tolist(), obs_list)
         except ImportError:
-            # Fallback if pennylane is not in the active python environment
             return coefficients, pauli_strings
 
     def summary(self) -> str:
