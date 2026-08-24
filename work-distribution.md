@@ -2,7 +2,7 @@
 
 **Project:** Quantum Mechanical Collisional Excitation of Plasma Neutrals and Ions  
 **Hackathon Target:** Coupling PySCF Multi-Root Electronic Structure with PennyLane Multi-Level Time-Evolution Circuits  
-**Git Base Branch:** `max-dev` (All feature branches should branch from and PR into `max-dev`)
+**Git Base Branch:** `main` (All feature branches should branch from and PR into `main`)
 
 ---
 
