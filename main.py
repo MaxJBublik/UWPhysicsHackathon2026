@@ -72,10 +72,10 @@ def run_full_pipeline(energy_ev: float = 50.0):
     print("🏁 Pipeline Execution Complete! Summary Table:")
     print("================================================================================")
     summary = analyzer.extract_electronic_structure_scaling()
-    print(f"{'Species':<8} | {'Z':<4} | {'Charge':<6} | {'ΔE₁ (eV)':<10} | {'Dipole μ₀₁ (a₀)':<18} | {'Dipole × Z':<12}")
-    print("-" * 75)
+    print(f"{'Species':<8} | {'Z':<4} | {'Charge':<6} | {'ΔE(³P) (eV)':<11} | {'ΔE(¹P) (eV)':<11} | {'Res. Dipole μ (a₀)':<18} | {'Osc. Str. f':<12} | {'μ × Z (a₀)':<10}")
+    print("-" * 95)
     for r in summary["scaling_records"]:
-        print(f"{r['species']:<8} | {r['atomic_number_Z']:<4} | {r['charge_q']:<6} | {r['excitation_energy_dE1_ev']:<10.2f} | {r['transition_dipole_mu01_au']:<18.4e} | {r['dipole_scaling_product_mu_times_Z']:<12.4e}")
+        print(f"{r['species']:<8} | {r['atomic_number_Z']:<4} | {r['charge_q']:<6} | {r['triplet_energy_dE_triplet_ev']:<11.2f} | {r['resonance_energy_dE_res_ev']:<11.2f} | {r['resonance_dipole_mu_res_au']:<18.4f} | {r['oscillator_strength_f_res']:<12.4f} | {r['dipole_scaling_product_mu_times_Z']:<10.2f}")
 
     print("\n[+] To view the interactive Web GUI, run:")
     print("    streamlit run app.py\n")

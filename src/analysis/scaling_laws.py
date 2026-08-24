@@ -47,30 +47,42 @@ class IsoelectronicScalingAnalyzer:
 
     def extract_electronic_structure_scaling(self) -> Dict[str, Any]:
         r"""
-        Extracts and tabulates electronic scaling parameters (Z, q, \Delta E_1, \mu_01, f_01).
+        Extracts and tabulates electronic scaling parameters (Z, q, \Delta E, \mu_res, f_res).
         """
         summary_table = []
         for sp, data in self.manifolds.items():
             Z = data["atomic_number"]
             q = data.get("charge", 0)
-            dE_ev = data["excitation_energies_ev"][1] if len(data["excitation_energies_ev"]) > 1 else 0.0
             
-            # Extract root-mean-square dipole magnitude for 0 -> 1 transition
-            mux = data["dipole_matrix_x"][0][1]
-            muy = data["dipole_matrix_y"][0][1]
-            muz = data["dipole_matrix_z"][0][1]
-            mu_mag = float(np.sqrt(mux**2 + muy**2 + muz**2))
+            # Extract excitation energies for lowest triplet (state 1) and resonance singlet
+            energies_ev = data["excitation_energies_ev"]
+            dE_triplet_ev = energies_ev[1] if len(energies_ev) > 1 else 0.0
             
-            osc_f = data["oscillator_strengths"][1] if len(data["oscillator_strengths"]) > 1 else 0.0
+            # Find the strongest dipole-allowed transition from ground state (0 -> j)
+            n_states = len(energies_ev)
+            max_mu = 0.0
+            res_state_idx = 1
+            for j in range(1, n_states):
+                mux = data["dipole_matrix_x"][0][j]
+                muy = data["dipole_matrix_y"][0][j]
+                muz = data["dipole_matrix_z"][0][j]
+                mu_mag = float(np.sqrt(mux**2 + muy**2 + muz**2))
+                if mu_mag > max_mu:
+                    max_mu = mu_mag
+                    res_state_idx = j
+
+            dE_singlet_ev = energies_ev[res_state_idx] if len(energies_ev) > res_state_idx else 0.0
+            osc_f_res = data["oscillator_strengths"][res_state_idx] if len(data.get("oscillator_strengths", [])) > res_state_idx else 0.0
 
             summary_table.append({
                 "species": sp,
                 "atomic_number_Z": Z,
                 "charge_q": q,
-                "excitation_energy_dE1_ev": dE_ev,
-                "transition_dipole_mu01_au": mu_mag,
-                "oscillator_strength_f01": osc_f,
-                "dipole_scaling_product_mu_times_Z": mu_mag * Z,
+                "triplet_energy_dE_triplet_ev": dE_triplet_ev,
+                "resonance_energy_dE_res_ev": dE_singlet_ev,
+                "resonance_dipole_mu_res_au": max_mu,
+                "oscillator_strength_f_res": osc_f_res,
+                "dipole_scaling_product_mu_times_Z": max_mu * Z,
             })
 
         return {
