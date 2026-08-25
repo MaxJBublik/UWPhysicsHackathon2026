@@ -59,7 +59,7 @@ class MultiRootElectronicStructure:
             raise ValueError("n_states must be a positive integer")
         self.species_config = get_species_config(species_key)
         self.species_key = species_key
-        self.basis = basis or self.species_config["recommended_basis"]
+        self.basis = basis or self.species_config.get("recommended_basis", "aug-cc-pVTZ")        
         self.n_states = n_states
         if method not in {"casci", "casscf"}:
             raise ValueError("method must be 'casci' or 'casscf'")
@@ -85,14 +85,25 @@ class MultiRootElectronicStructure:
         mol = gto.M(atom=[[cfg["symbol"], (0.0, 0.0, 0.0)]], basis=self.basis,
                     charge=cfg["charge"], spin=cfg["spin"], unit="Bohr",
                     symmetry=False, verbose=self.verbose)
+
+
+        
         mf = scf.RHF(mol).x2c()
+
+
+
         mf.conv_tol = 1e-10
         mf.max_cycle = 200
         mf.kernel()
+
+
         if not mf.converged:
             mf = mf.newton()
             mf.conv_tol = 1e-10
             mf.kernel()
+
+
+
         if not mf.converged:
             raise RuntimeError(f"RHF failed to converge for {self.species_key}")
 
@@ -104,7 +115,7 @@ class MultiRootElectronicStructure:
             raise ValueError("invalid active-space electron/orbital configuration")
         cas = (mcscf.CASSCF(mf, ncas, nelecas) if self.method == "casscf"
                else mcscf.CASCI(mf, ncas, nelecas))
-        cas.fcisolver = fci.direct_spin0.FCI(mol)
+        cas.fcisolver = fci.direct_spin1.FCI(mol)
         cas.fcisolver.nroots = self.n_states
         cas.fcisolver.conv_tol = 1e-9
         if self.method == "casscf":
@@ -134,13 +145,13 @@ class MultiRootElectronicStructure:
                                   optimize=True).real
                 dipoles[:, i, j] = value
                 dipoles[:, j, i] = value
-
+        dipoles_3d_norm = np.sqrt(np.sum(dipoles ** 2, axis=0))
         excitation_au = total_energies - total_energies[0]
         oscillator_matrix = self._oscillator_matrix(excitation_au, dipoles)
         self.results = self._pack_results(
             excitation_au, dipoles, oscillator_matrix[0].tolist(),
             is_mock=False, total_energies_au=total_energies,
-            spin_2s=0, spin_multiplicity=1,
+            spin_2s=0, spin_multiplicity=1, dipoles_3d_norm=dipoles_3d_norm.tolist(),
             oscillator_strength_matrix=oscillator_matrix,
             method=(f"RHF/SA-CASSCF({nelecas},{ncas}), singlet-only"
                     if self.method == "casscf" else
@@ -165,6 +176,9 @@ class MultiRootElectronicStructure:
     def _pack_results(self, energies_au: np.ndarray, dipoles: np.ndarray,
                       oscillator_strengths: List[float], *, is_mock: bool,
                       **metadata: Any) -> Dict[str, Any]:
+
+        if dipoles_3d_norm is None:
+            dipoles_3d_norm = np.sqrt(np.sum(dipoles ** 2, axis=0))
         return {
             "species": self.species_key,
             "atomic_number": self.species_config["atomic_number"],
@@ -177,6 +191,7 @@ class MultiRootElectronicStructure:
             "dipole_matrix_x": dipoles[0].tolist(),
             "dipole_matrix_y": dipoles[1].tolist(),
             "dipole_matrix_z": dipoles[2].tolist(),
+            "dipoles_3d_norm": dipoles_3d_norm.tolist(),
             "oscillator_strengths": oscillator_strengths,
             "is_mock": is_mock,
             **{key: value.tolist() if isinstance(value, np.ndarray) else value

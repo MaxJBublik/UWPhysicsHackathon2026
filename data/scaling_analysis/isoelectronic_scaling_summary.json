@@ -2,64 +2,34 @@
   "series": "Beryllium Isoelectronic Sequence (4 electrons)",
   "scaling_records": [
     {
-      "species": "be_casscf_9state_cas4e18o_cc-pvtz_raw",
+      "species": "Be",
       "atomic_number_Z": 4,
       "charge_q": 0,
-      "triplet_energy_dE_triplet_ev": 5.447858869033831,
-      "resonance_energy_dE_res_ev": 5.447858869033831,
-      "resonance_dipole_mu_res_au": 1.8990998417639067,
-      "oscillator_strength_f_res": [
-        -0.4813705508127722,
-        0.0,
-        7.552267742192346e-17,
-        1.402290602130608e-17,
-        0.06623977799941971,
-        0.04393002299312001,
-        0.015718093243938504,
-        0.021513348278960877,
-        0.05698358906706234
-      ],
-      "dipole_scaling_product_mu_times_Z": 7.596399367055627
+      "triplet_energy_dE_triplet_ev": 2.85053257831966,
+      "resonance_energy_dE_res_ev": 5.788857903228255,
+      "resonance_dipole_mu_res_au": 1.9536051267384225,
+      "oscillator_strength_f_res": 0.5412831850054683,
+      "dipole_scaling_product_mu_times_Z": 7.81442050695369
     },
     {
-      "species": "c2+_casscf_9state_cas4e30o_cc-pvtz_raw",
+      "species": "C2+",
       "atomic_number_Z": 6,
       "charge_q": 2,
-      "triplet_energy_dE_triplet_ev": 12.793609867126447,
-      "resonance_energy_dE_res_ev": 12.793609867128186,
-      "resonance_dipole_mu_res_au": 0.9051989355109605,
-      "oscillator_strength_f_res": [
-        -0.25682615284581556,
-        -2.0687356348521036e-41,
-        -1.3264431427635728e-41,
-        0.0,
-        0.048359170302842897,
-        0.02005213968546626,
-        0.011818146683537357,
-        0.05903168515310769,
-        0.0429275136817354
-      ],
-      "dipole_scaling_product_mu_times_Z": 5.431193613065763
+      "triplet_energy_dE_triplet_ev": 6.571328531255247,
+      "resonance_energy_dE_res_ev": 13.651991769385198,
+      "resonance_dipole_mu_res_au": 0.9329698456373493,
+      "oscillator_strength_f_res": 0.29113157258271716,
+      "dipole_scaling_product_mu_times_Z": 5.597819073824096
     },
     {
-      "species": "fe22+_casscf_9state_cas4e14o_cc-pvtz_raw",
+      "species": "Fe22+",
       "atomic_number_Z": 26,
       "charge_q": 22,
-      "triplet_energy_dE_triplet_ev": 84.23276192052874,
-      "resonance_energy_dE_res_ev": 84.2435068462749,
-      "resonance_dipole_mu_res_au": 0.1858573914092432,
-      "oscillator_strength_f_res": [
-        -0.071294197667766,
-        -7.993878595889631e-32,
-        -6.830357086586586e-33,
-        0.0,
-        1.1938026113129126e-11,
-        1.2065307961264687e-11,
-        0.018908311066850824,
-        0.018908314074955235,
-        0.0015574597424693225
-      ],
-      "dipole_scaling_product_mu_times_Z": 4.8322921766403235
+      "triplet_energy_dE_triplet_ev": 43.80436521798362,
+      "resonance_energy_dE_res_ev": 82.88056190733217,
+      "resonance_dipole_mu_res_au": 0.16018260468491693,
+      "oscillator_strength_f_res": 0.05210044869839336,
+      "dipole_scaling_product_mu_times_Z": 4.16474772180784
     }
   ]
 }

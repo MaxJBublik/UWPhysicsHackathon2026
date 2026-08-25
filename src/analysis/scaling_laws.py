@@ -194,8 +194,12 @@ class IsoelectronicScalingAnalyzer:
         return out_file
 
 
+import json
+import re
+from pathlib import Path
+
 def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
-    """Generates publication-quality matplotlib figures if matplotlib is installed."""
+    """Generates publication-quality matplotlib figures dynamically finding dominant excitation channels."""
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -216,7 +220,7 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-    # Palette and marker pools for unique visual assignments per dataset/file
+    # Palette and marker pools for unique visual assignments
     color_pool = [
         "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
         "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
@@ -252,10 +256,23 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
     ax1.grid(True, linestyle="--", alpha=0.6)
     ax1.legend(fontsize=10, loc="best")
 
-    # Plot 2: Branching Ratio to State 1 vs Incident Energy
+    # Plot 2: Dominant (Highest) Branching Ratio Channel vs Incident Energy
     for idx, (key, sp_data) in enumerate(species_dict.items()):
         energies = [r["incident_energy_ev"] for r in sp_data["energy_sweep_results"]]
-        br1 = [r["branching_ratios"].get("state_1", 0) * 100 for r in sp_data["energy_sweep_results"]]
+
+        # 1. Dynamically find the dominant excited state channel (excluding ground state 0)
+        state_sums = {}
+        for r in sp_data["energy_sweep_results"]:
+            for state_key, br_val in r.get("branching_ratios", {}).items():
+                norm_key = str(state_key).lower().replace(" ", "_")
+                if norm_key in ("state_0", "0"):
+                    continue
+                state_sums[state_key] = state_sums.get(state_key, 0.0) + br_val
+
+        top_state = max(state_sums, key=state_sums.get) if state_sums else "state_1"
+
+        # 2. Extract values for the top channel
+        br_top = [r["branching_ratios"].get(top_state, 0) * 100 for r in sp_data["energy_sweep_results"]]
         
         color = color_pool[idx % len(color_pool)]
         marker = marker_pool[idx % len(marker_pool)]
@@ -263,10 +280,14 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
         
         display_label = sp_data.get("source_file", key).replace("manifold_", "").replace(".json", "")
 
+        # 3. Format legend tag (e.g. 'state_2' -> '$0 \to 2$')
+        digit_match = re.search(r"\d+", top_state)
+        channel_tag = f"$0 \\to {digit_match.group(0)}$" if digit_match else top_state
+
         ax2.plot(
             energies,
-            br1,
-            label=f"{display_label} ($0 \\to 1$ Channel)",
+            br_top,
+            label=f"{display_label} ({channel_tag} Channel)",
             color=color,
             marker=marker,
             linestyle=linestyle,
@@ -274,8 +295,8 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
         )
 
     ax2.set_xlabel("Incident Electron Energy (eV)", fontsize=12)
-    ax2.set_ylabel(r"Branching Ratio $\mathcal{B}_{0 \to 1}$ (%)", fontsize=12)
-    ax2.set_title(r"Branching Ratio $\mathcal{B}(E_{\mathrm{inc}})$ vs Energy", fontsize=13, fontweight="bold")
+    ax2.set_ylabel(r"Dominant Branching Ratio $\mathcal{B}_{\mathrm{dom}}$ (%)", fontsize=12)
+    ax2.set_title(r"Dominant Channel Branching Ratio vs Energy", fontsize=13, fontweight="bold")
     ax2.grid(True, linestyle="--", alpha=0.6)
     ax2.legend(fontsize=10, loc="best")
 
