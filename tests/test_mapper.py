@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import numpy as np
+from src.conversion_constants import HARTREE_TO_EV
 
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -103,7 +104,7 @@ def test_mapper_on_pyscf_json_files():
         # Diagonal elements must match excitation energies
         for state_idx in range(mapper.n_states):
             expected_energy = data["excitation_energies_ev"][state_idx]
-            actual_energy = np.real(H_recon_0[state_idx, state_idx])
+            actual_energy = np.real(H_recon_0[state_idx, state_idx]) * HARTREE_TO_EV
             assert np.isclose(actual_energy, expected_energy, atol=1e-6)
 
 
