@@ -490,16 +490,22 @@ class CollisionDynamicsSimulator:
 # Section 5: CLI Entrypoint for Testing and Batch Runs
 # ============================================================================
 
-def run_all_species_simulation(energy_ev: float = 50.0):
+def run_all_species_simulation(energy_ev: float = 50.0, input_paths: Optional[list[str]] = None):
     """Runs collision dynamics simulation for all 3 species."""
     species_list = ["Be", "C2+", "Fe22+"]
-    for sp in species_list:
-        path = f"data/raw_pyscf/manifold_{sp}.json"
-        if os.path.exists(path):
-            print(f"\n================ Running Collision Dynamics for {sp} ================")
-            sim = CollisionDynamicsSimulator(path)
+    if input_paths is None:
+        #then we have already generated the pyscf manifolds and they should be here
+        input_paths = [f"data/raw_pyscf/manifold_{sp}.json" for sp in species_list]
+    
+
+
+
+    for p in input_paths:
+        if os.path.exists(p):
+            print(f"\n================ Running Collision Dynamics for {p} ================")
+            sim = CollisionDynamicsSimulator(p)
             res = sim.run_single_collision(impact_parameter_bohr=2.0, incident_energy_ev=energy_ev)
-            print(f"[*] Final Populations for {sp} (b=2.0 a0, E={energy_ev} eV):")
+            print(f"[*] Final Populations for {p} (b=2.0 a0, E={energy_ev} eV):")
             for idx, p in enumerate(res["final_populations"]):
                 print(f"    State {idx}: {p * 100:.2f}%")
             # Run impact parameter sweep

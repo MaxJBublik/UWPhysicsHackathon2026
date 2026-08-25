@@ -31,26 +31,51 @@ class IsoelectronicScalingAnalyzer:
     and branching ratios across the Beryllium isoelectronic series.
     """
 
-    def __init__(self, raw_pyscf_dir: str = "data/raw_pyscf"):
+    def __init__(
+        self,
+        raw_pyscf_dir: str | Path = "data/raw_pyscf",
+        manifold_paths: Optional[List[str | Path]] = None,
+    ):
         self.raw_dir = Path(raw_pyscf_dir)
-        self.species_keys = ["Be", "C2+", "Fe22+"]
         self.manifolds: Dict[str, Dict[str, Any]] = {}
-        self.load_all_species_manifolds()
+        self.manifold_paths: Dict[str, Path] = {}
+        self.species_keys: List[str] = []
 
-    def load_all_species_manifolds(self):
-        """Loads available manifold JSON files for Be, C2+, Fe22+."""
-        for sp in self.species_keys:
-            path = self.raw_dir / f"manifold_{sp}.json"
-            if path.exists():
+        self.load_all_species_manifolds(manifold_paths)
+
+    def load_all_species_manifolds(
+        self, manifold_paths: Optional[List[str | Path]] = None
+    ) -> None:
+        """Loads manifold JSON files either from explicit paths or by scanning raw_dir."""
+        paths_to_load: List[Path] = []
+
+        if manifold_paths:
+            paths_to_load = [Path(p) for p in manifold_paths]
+        elif self.raw_dir.exists() and self.raw_dir.is_dir():
+            paths_to_load = sorted(list(self.raw_dir.glob("*.json")))
+
+        for path in paths_to_load:
+            if not path.is_file():
+                continue
+            try:
                 with open(path, "r", encoding="utf-8") as f:
-                    self.manifolds[sp] = json.load(f)
+                    data = json.load(f)
+                    sp = data.get("species")
+                    if sp:
+                        self.manifolds[sp] = data
+                        self.manifold_paths[sp] = path
+            except (json.JSONDecodeError, OSError):
+                continue
+
+        self.species_keys = list(self.manifolds.keys())
 
     def extract_electronic_structure_scaling(self) -> Dict[str, Any]:
         r"""
         Extracts and tabulates electronic scaling parameters (Z, q, \Delta E, \mu_res, f_res).
         """
         summary_table = []
-        for sp, data in self.manifolds.items():
+        for sp in self.species_keys:
+            data = self.manifolds[sp]
             Z = data["atomic_number"]
             q = data.get("charge", 0)
             
@@ -96,9 +121,8 @@ class IsoelectronicScalingAnalyzer:
         output_dir: str = "data/scaling_analysis",
     ) -> Dict[str, Any]:
         """
-        Sweeps incident electron energy across energy_grid_ev for each species,
-        simulates collision circuits, integrates cross-sections, and computes
-        Branching Ratios as a function of incident energy.
+        Sweeps incident electron energy across energy_grid_ev for each loaded species manifold,
+        simulates collision circuits, integrates cross-sections, and computes Branching Ratios.
         """
         if energy_grid_ev is None:
             energy_grid_ev = [15.0, 30.0, 50.0, 75.0, 100.0, 150.0]
@@ -107,8 +131,8 @@ class IsoelectronicScalingAnalyzer:
         os.makedirs(output_dir, exist_ok=True)
 
         for sp in self.species_keys:
-            manifold_path = self.raw_dir / f"manifold_{sp}.json"
-            if not manifold_path.exists():
+            manifold_path = self.manifold_paths.get(sp)
+            if not manifold_path or not manifold_path.exists():
                 continue
 
             sim = CollisionDynamicsSimulator(str(manifold_path))
@@ -241,6 +265,7 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
 
 
 if __name__ == "__main__":
+    # Example usage with explicit path list passed from previous stage
     analyzer = IsoelectronicScalingAnalyzer()
     analyzer.save_scaling_summary()
     analyzer.compute_energy_dependent_branching_ratios()

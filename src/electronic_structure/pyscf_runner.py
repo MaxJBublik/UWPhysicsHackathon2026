@@ -206,11 +206,12 @@ def run_all_species(n_states: int = 4,
 
         existing_paths = []
         for file_path in json_files:
+
+            #validation of file contents
             validate_manifold_file(file_path)
             existing_paths.append(str(file_path))
-        print("found it")
+        
         return existing_paths
-    print("didn't find it")
     paths = []
     for species in SPECIES_CONFIGS:
         calculation = MultiRootElectronicStructure(

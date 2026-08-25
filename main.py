@@ -36,29 +36,18 @@ def run_full_pipeline(energy_ev: float = 50.0):
     # 1. PySCF Electronic Structure
     print("\n[Step 1/4] Checking / Generating PySCF Electronic Structure Manifolds...")
     manifold_dir = Path("data/new_raw_pyscf")
-    species_list = ["Be", "C2+", "Fe22+"]
 
-    found_species = set()
-    if manifold_dir.exists():
-        for file_path in manifold_dir.glob("*.json"):
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "species" in data:
-                        found_species.add(data["species"])
-            except (json.JSONDecodeError, OSError):
-                continue  # Skip unreadable or corrupted JSON files
-
-    all_exist = set(species_list).issubset(found_species)
-    if not all_exist:
-        missing = set(species_list) - found_species
-        print(f"[*] Missing manifold(s) for {missing}. Running electronic structure calculations...")
-        run_all_species(n_states=4, output_dir=str(manifold_dir))
+    # Delegate validation or generation directly to run_all_species
+    if manifold_dir.exists() and any(manifold_dir.glob("*.json")):
+        print(f"[*] Validating existing manifolds in {manifold_dir}/...")
+        paths = run_all_species(input_dir=manifold_dir)
     else:
-        print(f"[+] All PySCF manifold files verified in {manifold_dir}/ (Found species: {found_species})")
+        print(f"[*] Missing manifolds in {manifold_dir}/. Running electronic structure calculations...")
+        paths = run_all_species(n_states=4, output_dir=str(manifold_dir))
+
     # 2. Quantum Time Evolution & Population Tracking
     print(f"\n[Step 2/4] Simulating Quantum Time Evolution & Population Dynamics (E={energy_ev} eV)...")
-    run_all_species_simulation(energy_ev=energy_ev)
+    run_all_species_simulation(energy_ev=energy_ev, input_paths=paths)
 
     # 3. Integrate Cross-Sections & Branching Ratios
     print("\n[Step 3/4] Integrating Cross-Sections & Calculating Branching Ratios...")
@@ -75,20 +64,41 @@ def run_full_pipeline(energy_ev: float = 50.0):
 
     # 4. Isoelectronic Z-Scaling Synthesis
     print("\n[Step 4/4] Synthesizing Isoelectronic Z-Scaling Laws & Branching Ratio Spectra...")
-    analyzer = IsoelectronicScalingAnalyzer()
+    analyzer = IsoelectronicScalingAnalyzer(
+        raw_pyscf_dir=manifold_dir,
+        manifold_paths=paths
+    )
     analyzer.save_scaling_summary()
-    analyzer.compute_energy_dependent_branching_ratios(energy_grid_ev=[15.0, 30.0, 50.0, 75.0, 100.0, 150.0])
+    analyzer.compute_energy_dependent_branching_ratios(
+        energy_grid_ev=[6.0, 8.0, 10.0, 12.0, 15.0, 30.0, 50.0, 75.0, 100.0, 150.0]
+    )
     generate_scaling_plots()
 
     # Final Summary Output
     print("\n================================================================================")
     print("🏁 Pipeline Execution Complete! Summary Table:")
     print("================================================================================")
+    
     summary = analyzer.extract_electronic_structure_scaling()
-    print(f"{'Species':<8} | {'Z':<4} | {'Charge':<6} | {'ΔE(³P) (eV)':<11} | {'ΔE(¹P) (eV)':<11} | {'Res. Dipole μ (a₀)':<18} | {'Osc. Str. f':<12} | {'μ × Z (a₀)':<10}")
-    print("-" * 95)
-    for r in summary["scaling_records"]:
-        print(f"{r['species']:<8} | {r['atomic_number_Z']:<4} | {r['charge_q']:<6} | {r['triplet_energy_dE_triplet_ev']:<11.2f} | {r['resonance_energy_dE_res_ev']:<11.2f} | {r['resonance_dipole_mu_res_au']:<18.4f} | {r['oscillator_strength_f_res']:<12.4f} | {r['dipole_scaling_product_mu_times_Z']:<10.2f}")
+    records = summary.get("scaling_records", [])
+
+    if not records:
+        print("[!] No scaling records available to display.")
+    else:
+        header = f"{'Species':<8} | {'Z':>3} | {'Charge':>6} | {'ΔE(³P) (eV)':>11} | {'ΔE(¹P) (eV)':>11} | {'Res. Dipole μ (a₀)':>18} | {'Osc. Str. f':>12} | {'μ × Z (a₀)':>10}"
+        print(header)
+        print("-" * len(header))
+        for r in records:
+            print(
+                f"{r['species']:<8} | "
+                f"{r['atomic_number_Z']:>3} | "
+                f"{r['charge_q']:>6} | "
+                f"{r['triplet_energy_dE_triplet_ev']:>11.2f} | "
+                f"{r['resonance_energy_dE_res_ev']:>11.2f} | "
+                f"{r['resonance_dipole_mu_res_au']:>18.4f} | "
+                f"{r['oscillator_strength_f_res']:>12.4f} | "
+                f"{r['dipole_scaling_product_mu_times_Z']:>10.2f}"
+            )
 
     print("\n[+] To view the interactive Web GUI, run:")
     print("    streamlit run app.py\n")
