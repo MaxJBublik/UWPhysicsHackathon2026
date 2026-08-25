@@ -20,7 +20,6 @@ except ImportError:
 from src.quantum.mapper import MultiStatePauliMapper
 from src.quantum.time_evolution import (
     CollisionDynamicsSimulator,
-    compute_collision_electric_field,
     simulate_exact_unitary_evolution,
 )
 from src.collision.trajectories import generate_trajectory

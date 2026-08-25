@@ -50,6 +50,36 @@ HARTREE_TO_EV = 27.211386245988
 TIME_AU_TO_FEMTOSECONDS = 0.024188843265857
 
 
+def configure_execution_mode(
+    n_states: int, 
+    requested_trotter: Optional[bool] = None,
+    requested_time_steps: Optional[int] = None
+) -> Tuple[bool, int]:
+    """
+    Determines whether to use PennyLane (Trotter) or exact matrix exponentials 
+    and sets TIME_STEPS based on the manifold size N.
+    """
+    # 1. Custom Trotter logic based on manifold size (Modify this logic as desired)
+    if requested_trotter is None:
+        # Example logic: Use exact matrix exponentials for small manifolds (N <= 4)
+        # and Trotterized quantum circuits for larger manifolds (N > 4)
+        use_trotter = n_states > 8
+    else:
+        use_trotter = requested_trotter
+
+    # 2. Custom TIME_STEPS logic based on execution mode & manifold size
+    if requested_time_steps is None:
+        if use_trotter:
+            # Trotter is heavier per step; use a leaner step count
+            TIME_STEPS = 200
+        else:
+            # Exact matrix math is fast; use higher resolution
+            TIME_STEPS = 2000 if n_states <= 4 else 1000
+    else:
+        TIME_STEPS = requested_time_steps
+
+    return use_trotter, TIME_STEPS
+
 
 # ============================================================================
 # Section 2: PennyLane Trotterized Quantum Circuit Engine
@@ -224,16 +254,13 @@ def simulate_exact_unitary_evolution(
 # Section 4: High-Level Population Simulation Runner & Batch Sweeper
 # ============================================================================
 def _parallel_worker(args: tuple):
-    """Standalone worker to prevent pickling unpicklable module attributes."""
-    json_path, b, energy, use_trotter = args
+    json_path, b, energy, use_trotter, n_time_steps = args
     
-    # Instantiate a fresh simulator inside the child process
     local_sim = CollisionDynamicsSimulator(json_path)
-    
     return local_sim.run_single_collision(
         impact_parameter_bohr=b,
         incident_energy_ev=energy,
-        n_time_steps=500,
+        n_time_steps=n_time_steps,
         use_trotter=use_trotter
     )
 class CollisionDynamicsSimulator:
@@ -268,8 +295,8 @@ class CollisionDynamicsSimulator:
         incident_energy_ev: float,
         t_min_au: float = -15.0,
         t_max_au: float = 15.0,
-        n_time_steps: int = 500,
-        use_trotter: bool = True,
+        n_time_steps: Optional[int] = None,
+        use_trotter: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Simulates a single collision event with specified impact parameter and energy.
@@ -279,11 +306,16 @@ class CollisionDynamicsSimulator:
         result : Dict[str, Any]
             Dictionary containing time grid, electric fields, and state populations.
         """
+        use_trotter, TIME_STEPS = configure_execution_mode(
+            n_states=self.mapper.n_states,
+            requested_trotter=use_trotter,
+            requested_time_steps=n_time_steps
+        )
 
         v_au = incident_velocity(incident_energy_ev)
         t_boundary = max(15.0, 30.0 / v_au)
 
-        t_grid = np.linspace(-t_boundary, t_boundary, n_time_steps)
+        t_grid = np.linspace(-t_boundary, t_boundary, TIME_STEPS)
         
         
         # 1. Determine trajectory type based on ion charge
@@ -303,12 +335,13 @@ class CollisionDynamicsSimulator:
         # ----------------
 
         if use_trotter and self.pennylane_engine is not None and self.pennylane_engine.has_pennylane:
-            print("[*] Using PennyLane Trotterized circuit for time evolution.")
+            # print(f"[*] [N={self.mapper.n_states}] Using PennyLane Trotter circuit (TIME_STEPS={TIME_STEPS})")
             populations_all = self.pennylane_engine.simulate_trotter_trajectory(t_grid, e_fields)
         else:
-            print("[!] PennyLane not available or Trotter disabled. Using exact matrix exponential propagation.")
+            # print(f"[*] [N={self.mapper.n_states}] Using exact matrix exponentials (TIME_STEPS={TIME_STEPS})")
             populations_all = simulate_exact_unitary_evolution(self.mapper, t_grid, e_fields)
 
+            
         # Extract only physical manifold states (0 to N-1)
         n_manifold = self.mapper.n_states
         state_pop_dict = {}
@@ -337,15 +370,20 @@ class CollisionDynamicsSimulator:
         b_max_bohr: float = 10.0,
         n_b_points: int = 25,
         output_dir: str = "data/processed_circuits",
-        use_trotter: bool = True, 
+        use_trotter: bool = False, 
+        n_time_steps: Optional[int] = None,
     ) -> Dict[str, Any]:
         
         b_grid = np.linspace(b_min_bohr, b_max_bohr, n_b_points)
         final_probs = {f"state_{i}": [] for i in range(self.mapper.n_states)}
-
+        use_trotter, TIME_STEPS = configure_execution_mode(
+            n_states=self.mapper.n_states,
+            requested_trotter=use_trotter,
+            requested_time_steps=n_time_steps
+        )
         # Package the arguments for each child process
         worker_args = [
-            (self.manifold_json_path, b, incident_energy_ev, use_trotter) 
+            (self.manifold_json_path, b, incident_energy_ev, use_trotter, TIME_STEPS) 
             for b in b_grid
         ]
 
@@ -390,7 +428,7 @@ def run_all_species_simulation(energy_ev: float = 50.0):
         if os.path.exists(path):
             print(f"\n================ Running Collision Dynamics for {sp} ================")
             sim = CollisionDynamicsSimulator(path)
-            res = sim.run_single_collision(impact_parameter_bohr=2.0, incident_energy_ev=energy_ev, use_trotter=True)
+            res = sim.run_single_collision(impact_parameter_bohr=2.0, incident_energy_ev=energy_ev)
             print(f"[*] Final Populations for {sp} (b=2.0 a0, E={energy_ev} eV):")
             for idx, p in enumerate(res["final_populations"]):
                 print(f"    State {idx}: {p * 100:.2f}%")

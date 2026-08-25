@@ -52,16 +52,15 @@ def _trapezoid_quadrature(y: np.ndarray, x: np.ndarray, axis: int = -1) -> np.nd
 
 
 def _simpson_quadrature(y: np.ndarray, x: np.ndarray, axis: int = -1) -> np.ndarray:
-    """Composite Simpson's rule numerical integration with linear fallback."""
     try:
         from scipy.integrate import simpson
         return simpson(y, x=x, axis=axis)
     except ImportError:
         pass
 
-    # Pure NumPy manual Simpson's rule implementation
     n = y.shape[axis] if y.ndim > 1 else len(y)
-    if n < 3:
+    # Simpson's 1/3 rule requires an odd number of points (even sub-intervals)
+    if n < 3 or (n % 2 == 0):
         return _trapezoid_quadrature(y, x=x, axis=axis)
 
     dx = np.diff(x)
