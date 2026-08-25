@@ -201,13 +201,27 @@ class MultiRootElectronicStructure:
             oscillator_strength_matrix=oscillator_matrix,
             method="scaled-development-manifold")
 
-    def save_json(self, output_dir: str | Path = "data/raw_pyscf") -> str:
-        """Calculate if necessary and save the manifold JSON."""
+    def save_json(
+        self, 
+        output_dir: str | Path = "data/raw_pyscf", 
+        filename: Optional[str] = None
+    ) -> str:
+        """Calculate if necessary and save the manifold JSON with overwrite protection."""
         if self.results is None:
             self.run_calculation()
         directory = Path(output_dir)
         directory.mkdir(parents=True, exist_ok=True)
-        path = directory / f"manifold_{self.species_key}.json"
+        
+        if filename:
+            path = directory / filename
+        else:
+            base_name = f"manifold_{self.species_key}"
+            path = directory / f"{base_name}.json"
+            counter = 1
+            while path.exists():
+                path = directory / f"{base_name}_{counter}.json"
+                counter += 1
+
         with path.open("w", encoding="utf-8") as stream:
             json.dump(self.results, stream, indent=2, allow_nan=False)
             stream.write("\n")

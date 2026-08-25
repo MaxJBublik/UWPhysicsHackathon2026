@@ -46,7 +46,7 @@ class IsoelectronicScalingAnalyzer:
     def load_all_species_manifolds(
         self, manifold_paths: Optional[List[str | Path]] = None
     ) -> None:
-        """Loads manifold JSON files either from explicit paths or by scanning raw_dir."""
+        """Loads manifold JSON files keyed by unique file stem."""
         paths_to_load: List[Path] = []
 
         if manifold_paths:
@@ -60,10 +60,10 @@ class IsoelectronicScalingAnalyzer:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    sp = data.get("species")
-                    if sp:
-                        self.manifolds[sp] = data
-                        self.manifold_paths[sp] = path
+                    # Use file stem as unique key (e.g. 'be_casscf_nist')
+                    file_key = path.stem.replace("manifold_", "")
+                    self.manifolds[file_key] = data
+                    self.manifold_paths[file_key] = path
             except (json.JSONDecodeError, OSError):
                 continue
 
@@ -120,18 +120,14 @@ class IsoelectronicScalingAnalyzer:
         energy_grid_ev: Optional[List[float]] = None,
         output_dir: str = "data/scaling_analysis",
     ) -> Dict[str, Any]:
-        """
-        Sweeps incident electron energy across energy_grid_ev for each loaded species manifold,
-        simulates collision circuits, integrates cross-sections, and computes Branching Ratios.
-        """
         if energy_grid_ev is None:
             energy_grid_ev = [15.0, 30.0, 50.0, 75.0, 100.0, 150.0]
 
         results_by_species: Dict[str, Any] = {}
         os.makedirs(output_dir, exist_ok=True)
 
-        for sp in self.species_keys:
-            manifold_path = self.manifold_paths.get(sp)
+        for key in self.species_keys:
+            manifold_path = self.manifold_paths.get(key)
             if not manifold_path or not manifold_path.exists():
                 continue
 
@@ -139,7 +135,6 @@ class IsoelectronicScalingAnalyzer:
             species_energy_records = []
 
             for E_inc in energy_grid_ev:
-                # 1. Sweep impact parameter
                 sweep_res = sim.sweep_impact_parameters(
                     incident_energy_ev=E_inc,
                     b_min_bohr=0.5,
@@ -148,14 +143,14 @@ class IsoelectronicScalingAnalyzer:
                     output_dir="data/processed_circuits",
                 )
 
-                # 2. Calculate Cross Sections & Branching Ratios
                 cs_records = calculate_cross_sections_and_branching_ratios(sweep_res)
                 
-                # Save cross section table
-                cs_out_path = Path("data/cross_sections") / f"cross_sections_{sp}_E{int(E_inc)}eV.json"
+                # FIX: Use unique run_id or key so cross section files don't overwrite
+                run_id = sweep_res.get("run_id", f"populations_{key}_E{int(E_inc)}eV")
+                cs_out_name = run_id.replace("populations_", "cross_sections_") + ".json"
+                cs_out_path = Path("data/cross_sections") / cs_out_name
                 save_processed_circuit_cross_sections(sweep_res, cs_out_path)
 
-                # Extract state_1 and total cross sections
                 state1_rec = next((r for r in cs_records if r["state_index"] == 1), cs_records[0])
                 
                 record = {
@@ -166,10 +161,11 @@ class IsoelectronicScalingAnalyzer:
                 }
                 species_energy_records.append(record)
 
-            results_by_species[sp] = {
-                "species": sp,
-                "atomic_number": self.manifolds[sp]["atomic_number"],
-                "charge": self.manifolds[sp].get("charge", 0),
+            results_by_species[key] = {
+                "species": self.manifolds[key].get("species", key),
+                "source_file": manifold_path.name,
+                "atomic_number": self.manifolds[key]["atomic_number"],
+                "charge": self.manifolds[key].get("charge", 0),
                 "energy_grid_ev": energy_grid_ev,
                 "energy_sweep_results": species_energy_records,
             }
@@ -210,44 +206,70 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
     if not summary_file.exists():
         return
 
-    with open(summary_file, "r") as f:
+    with open(summary_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     species_dict = data["species_data"]
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+    if not species_dict:
+        print("[!] No species data found in summary file.")
+        return
 
-    colors = {"Be": "blue", "C2+": "green", "Fe22+": "red"}
-    markers = {"Be": "o", "C2+": "s", "Fe22+": "^"}
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Palette and marker pools for unique visual assignments per dataset/file
+    color_pool = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+    ]
+    marker_pool = ["o", "s", "^", "D", "v", "<", ">", "p", "*", "h"]
+    linestyle_pool = ["-", "--", "-.", ":"]
 
     # Plot 1: Total Excitation Cross-Section vs Incident Energy
-    for sp, sp_data in species_dict.items():
+    for idx, (key, sp_data) in enumerate(species_dict.items()):
         energies = [r["incident_energy_ev"] for r in sp_data["energy_sweep_results"]]
         sigmas = [r["total_excitation_sigma_mb"] for r in sp_data["energy_sweep_results"]]
+        
+        color = color_pool[idx % len(color_pool)]
+        marker = marker_pool[idx % len(marker_pool)]
+        linestyle = linestyle_pool[(idx // len(color_pool)) % len(linestyle_pool)]
+        
+        display_label = sp_data.get("source_file", key).replace("manifold_", "").replace(".json", "")
+        
         ax1.plot(
             energies,
             sigmas,
-            label=f"{sp} (Z={sp_data['atomic_number']}, q={sp_data['charge']})",
-            color=colors.get(sp, "black"),
-            marker=markers.get(sp, "o"),
+            label=f"{display_label} (Z={sp_data['atomic_number']}, q={sp_data['charge']})",
+            color=color,
+            marker=marker,
+            linestyle=linestyle,
             linewidth=2,
         )
+
     ax1.set_yscale("log")
     ax1.set_xlabel("Incident Electron Energy (eV)", fontsize=12)
     ax1.set_ylabel(r"Total Excitation Cross-Section $\sigma_{\mathrm{tot}}$ (Mb)", fontsize=12)
     ax1.set_title("Isoelectronic Cross-Section Scaling", fontsize=13, fontweight="bold")
     ax1.grid(True, linestyle="--", alpha=0.6)
-    ax1.legend(fontsize=11)
+    ax1.legend(fontsize=10, loc="best")
 
     # Plot 2: Branching Ratio to State 1 vs Incident Energy
-    for sp, sp_data in species_dict.items():
+    for idx, (key, sp_data) in enumerate(species_dict.items()):
         energies = [r["incident_energy_ev"] for r in sp_data["energy_sweep_results"]]
         br1 = [r["branching_ratios"].get("state_1", 0) * 100 for r in sp_data["energy_sweep_results"]]
+        
+        color = color_pool[idx % len(color_pool)]
+        marker = marker_pool[idx % len(marker_pool)]
+        linestyle = linestyle_pool[(idx // len(color_pool)) % len(linestyle_pool)]
+        
+        display_label = sp_data.get("source_file", key).replace("manifold_", "").replace(".json", "")
+
         ax2.plot(
             energies,
             br1,
-            label=f"{sp} ($0 \\to 1$ Dipole Channel)",
-            color=colors.get(sp, "black"),
-            marker=markers.get(sp, "o"),
+            label=f"{display_label} ($0 \\to 1$ Channel)",
+            color=color,
+            marker=marker,
+            linestyle=linestyle,
             linewidth=2,
         )
 
@@ -255,7 +277,7 @@ def generate_scaling_plots(output_dir: str = "data/scaling_analysis"):
     ax2.set_ylabel(r"Branching Ratio $\mathcal{B}_{0 \to 1}$ (%)", fontsize=12)
     ax2.set_title(r"Branching Ratio $\mathcal{B}(E_{\mathrm{inc}})$ vs Energy", fontsize=13, fontweight="bold")
     ax2.grid(True, linestyle="--", alpha=0.6)
-    ax2.legend(fontsize=11)
+    ax2.legend(fontsize=10, loc="best")
 
     plt.tight_layout()
     plot_path = Path(output_dir) / "isoelectronic_scaling_trends.png"

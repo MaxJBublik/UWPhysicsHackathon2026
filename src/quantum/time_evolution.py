@@ -28,7 +28,7 @@ from typing import Dict, List, Tuple, Any, Optional, Union
 import concurrent.futures
 from functools import partial
 
-
+from pathlib import Path
 
 
 
@@ -155,12 +155,13 @@ class PennyLaneTimeEvolution:
     Implements multi-step Trotterized quantum time evolution using PennyLane.
     """
 
-    def __init__(self, mapper: MultiStatePauliMapper, shots: Optional[int] = None):
+    def __init__(self, mapper: MultiStatePauliMapper, shots: Optional[int] = None, force_classic: bool = False):
         self.mapper = mapper
         self.n_qubits = mapper.n_qubits
         self.shots = shots
         self.has_pennylane = False
         self.init_error = None
+        self.force_classic = force_classic
 
         try:
             import pennylane as qml
@@ -174,20 +175,19 @@ class PennyLaneTimeEvolution:
             self.has_pennylane = False
             self.init_error = str(e)
 
-    def _apply_trotter_step_pennylane(self, coeffs: np.ndarray, pauli_strings: List[str], dt_h: float):
+    def _apply_trotter_step_pennylane(self, coeffs: np.ndarray, pauli_strings: List[str], dt_au: float):
         r"""
         Applies a single Trotter slice: \prod_k \exp(-i * c_k * \hat{P}_k * \Delta t)
         using PennyLane parameterized Pauli rotation gates (qml.PauliRot).
         """
         qml = self.qml
         # Hamiltonian and time are both in atomic units
-        dt_scaled = dt_au
 
         for c, p_str in zip(coeffs, pauli_strings):
             if abs(c) < 1e-8:
                 continue
             # PennyLane qml.PauliRot applies exp(-i * theta / 2 * P), so theta = 2 * c * dt
-            theta = 2.0 * float(c) * dt_h
+            theta = 2.0 * float(c) * dt_au
             
             # Check if all Identity
             if all(char == "I" for char in p_str):
@@ -228,6 +228,10 @@ class PennyLaneTimeEvolution:
         """
         if not self.has_pennylane:
             print(f"[WARNING] PennyLane unavailable ({self.init_error}). Reverting to exact matrix exponential simulation.")
+            return simulate_exact_unitary_evolution(self.mapper, t_grid_au, e_fields_au)
+
+        if self.force_classic:
+            print("[INFO] PennyLane Trotter simulation disabled by force_classic=True. Using exact matrix exponential.")
             return simulate_exact_unitary_evolution(self.mapper, t_grid_au, e_fields_au)
 
         try:
@@ -324,9 +328,9 @@ def simulate_exact_unitary_evolution(
 # Section 4: High-Level Population Simulation Runner & Batch Sweeper
 # ============================================================================
 def _parallel_worker(args: tuple):
-    json_path, b, energy, use_trotter, n_time_steps = args
+    json_path, b, energy, use_trotter, n_time_steps, force_classic = args
     
-    local_sim = CollisionDynamicsSimulator(json_path)
+    local_sim = CollisionDynamicsSimulator(json_path, force_classic=force_classic)
     return local_sim.run_single_collision(
         impact_parameter_bohr=b,
         incident_energy_ev=energy,
@@ -343,15 +347,19 @@ class CollisionDynamicsSimulator:
         manifold_json_path: str,
         use_pennylane_if_available: bool = True,
         unphysical_penalty_ev: float = 100.0,
+        force_classic: bool = False
     ):
         self.manifold_json_path = manifold_json_path
-        
-        
         self.manifold_data = load_manifold(manifold_json_path)
-        # ----------------
         
+        self.force_classic = force_classic
         self.species = self.manifold_data["species"]
         self.charge = self.manifold_data.get("charge", 0)
+
+        # Extract file stem to distinguish multiple variants of the same species
+        # e.g., 'be_casscf_nist' -> 'be_casscf_nist'
+        self.source_stem = Path(manifold_json_path).stem.replace("manifold_", "")
+
         self.mapper = MultiStatePauliMapper(
             self.manifold_data, unphysical_penalty_ev=unphysical_penalty_ev
         )
@@ -404,9 +412,10 @@ class CollisionDynamicsSimulator:
         e_fields = electric_field(trajectory.position, softening_bohr=0.2)
         # ----------------
 
-        if use_trotter and self.pennylane_engine is not None and self.pennylane_engine.has_pennylane:
+        if use_trotter and self.pennylane_engine is not None and self.pennylane_engine.has_pennylane and not self.force_classic:
             # print(f"[*] [N={self.mapper.n_states}] Using PennyLane Trotter circuit (TIME_STEPS={TIME_STEPS})")
             populations_all = self.pennylane_engine.simulate_trotter_trajectory(t_grid, e_fields)
+            
         else:
             # print(f"[*] [N={self.mapper.n_states}] Using exact matrix exponentials (TIME_STEPS={TIME_STEPS})")
             populations_all = simulate_exact_unitary_evolution(self.mapper, t_grid, e_fields)
@@ -451,24 +460,38 @@ class CollisionDynamicsSimulator:
             requested_trotter=use_trotter,
             requested_time_steps=n_time_steps
         )
-        # Package the arguments for each child process
+        
         worker_args = [
-            (self.manifold_json_path, b, incident_energy_ev, use_trotter, TIME_STEPS) 
+            (self.manifold_json_path, b, incident_energy_ev, use_trotter, TIME_STEPS, self.force_classic) 
             for b in b_grid
         ]
 
         print(f"[*] Running {n_b_points} parallel collision simulations...")
         
-        # Use the top-level function for mapping
         with concurrent.futures.ProcessPoolExecutor() as executor:
             results = list(executor.map(_parallel_worker, worker_args))
 
-        # Reassemble the results in order
         for res in results:
             for i in range(self.mapper.n_states):
                 final_probs[f"state_{i}"].append(res["final_populations"][i])
 
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 1. Unique name using input manifold file stem instead of generic species string
+        base_filename = f"populations_{self.source_stem}_E{int(incident_energy_ev)}eV"
+        out_path = os.path.join(output_dir, f"{base_filename}.json")
+
+        # 2. Increment counter to prevent overwrites if exact same run parameters exist
+        counter = 1
+        while os.path.exists(out_path):
+            out_path = os.path.join(output_dir, f"{base_filename}_{counter}.json")
+            counter += 1
+
+        run_id = Path(out_path).stem
+
         sweep_data = {
+            "run_id": run_id,
+            "source_manifold": os.path.basename(self.manifold_json_path),
             "species": self.species,
             "charge": self.charge,
             "n_states": self.mapper.n_states,
@@ -477,10 +500,9 @@ class CollisionDynamicsSimulator:
             "excitation_probabilities_vs_b": final_probs,
         }
 
-        os.makedirs(output_dir, exist_ok=True)
-        out_path = os.path.join(output_dir, f"populations_{self.species}_E{int(incident_energy_ev)}eV.json")
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(sweep_data, f, indent=2)
+            
         print(f"[+] Saved impact parameter sweep to: {out_path}")
 
         return sweep_data
@@ -490,7 +512,7 @@ class CollisionDynamicsSimulator:
 # Section 5: CLI Entrypoint for Testing and Batch Runs
 # ============================================================================
 
-def run_all_species_simulation(energy_ev: float = 50.0, input_paths: Optional[list[str]] = None):
+def run_all_species_simulation(energy_ev: float = 50.0, input_paths: Optional[list[str]] = None, force_classic: bool = False):
     """Runs collision dynamics simulation for all 3 species."""
     species_list = ["Be", "C2+", "Fe22+"]
     if input_paths is None:
@@ -503,7 +525,7 @@ def run_all_species_simulation(energy_ev: float = 50.0, input_paths: Optional[li
     for p in input_paths:
         if os.path.exists(p):
             print(f"\n================ Running Collision Dynamics for {p} ================")
-            sim = CollisionDynamicsSimulator(p)
+            sim = CollisionDynamicsSimulator(p, force_classic=force_classic)
             res = sim.run_single_collision(impact_parameter_bohr=2.0, incident_energy_ev=energy_ev)
             print(f"[*] Final Populations for {p} (b=2.0 a0, E={energy_ev} eV):")
             for idx, p in enumerate(res["final_populations"]):
