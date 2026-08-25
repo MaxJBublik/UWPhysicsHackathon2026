@@ -1,0 +1,5 @@
+
+# Physical conversion factors (Atomic units: \hbar = m_e = e = 1)
+EV_TO_HARTREE = 1.0 / 27.211386245988
+HARTREE_TO_EV = 27.211386245988
+TIME_AU_TO_FEMTOSECONDS = 0.024188843265857
