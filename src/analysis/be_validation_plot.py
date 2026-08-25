@@ -6,7 +6,6 @@ Run from the repository root with:
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 
 import matplotlib
@@ -18,7 +17,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = ROOT / "data" / "Be_validation_graphs"
-CROSS_SECTION_DIR = OUTPUT_DIR / "cross_sections"
+SIMULATION_DATA_PATH = OUTPUT_DIR / "beryllium_cross_sections.csv"
 
 # Supplied validation values: incident energy in eV and cross section in cm².
 ENERGY_EV = np.array(
@@ -33,46 +32,57 @@ CROSS_SECTION_CM2 = np.array(
 )
 
 
-def load_average_state_cross_sections(
-    cross_section_dir: Path = CROSS_SECTION_DIR,
+def load_average_p_cross_sections(
+    data_path: Path = SIMULATION_DATA_PATH,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Average the state 1–3 cross sections in each extracted Be JSON file."""
-    points: list[tuple[float, float]] = []
-    for path in cross_section_dir.glob("cross_sections_Be_E*eV.json"):
-        with path.open(encoding="utf-8") as handle:
-            records = json.load(handle)
-        states = {record["state_index"]: record["sigma_cm2"] for record in records}
-        required_states = {1, 2, 3}
-        if not required_states.issubset(states):
-            raise ValueError(f"{path} is missing one or more of states 1, 2, and 3.")
-        points.append((records[0]["incident_energy_ev"],
-                       np.mean([states[index] for index in sorted(required_states)])))
+    """Load the supplied average p-state cross sections in cm²."""
+    with data_path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        required_columns = {"incident_energy_ev", "average_p_sigma_cm2"}
+        if reader.fieldnames is None or not required_columns.issubset(reader.fieldnames):
+            raise ValueError(f"{data_path} must include {sorted(required_columns)}.")
+        points = [
+            (float(row["incident_energy_ev"]), float(row["average_p_sigma_cm2"]))
+            for row in reader
+        ]
     if not points:
-        raise FileNotFoundError(f"No extracted Be cross-section files found in {cross_section_dir}")
-    points.sort()
-    energies, averages = zip(*points)
-    return np.asarray(energies), np.asarray(averages)
+        raise ValueError(f"No simulation cross-section data found in {data_path}.")
+    energies, cross_sections = zip(*sorted(points))
+    return np.asarray(energies), np.asarray(cross_sections)
 
 
 def plot_cross_section(output_dir: Path = OUTPUT_DIR) -> Path:
     """Create a semi-log Be cross-section plot (linear energy, log cross section)."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    average_energy_ev, average_cross_section_cm2 = load_average_state_cross_sections()
+    average_energy_ev, average_cross_section_cm2 = load_average_p_cross_sections()
+    percent_difference = 100 * (
+        np.interp(ENERGY_EV, average_energy_ev, average_cross_section_cm2*3)
+        - CROSS_SECTION_CM2
+    ) / CROSS_SECTION_CM2
     with plt.rc_context({"font.size": 20, "axes.titlesize": 20,
                          "axes.labelsize": 20, "xtick.labelsize": 20,
                          "ytick.labelsize": 20, "legend.fontsize": 20}):
         fig, axis = plt.subplots(figsize=(12, 7.5))
         axis.plot(ENERGY_EV, CROSS_SECTION_CM2, "o-", color="#2878b5",
-                  linewidth=2.5, markersize=7, label="Supplied Be validation data")
-        axis.plot(average_energy_ev, average_cross_section_cm2, "s--",
+                  linewidth=2.5, markersize=7, label="Be validation data")
+        axis.plot(average_energy_ev, average_cross_section_cm2*3, "s--",
                   color="#d1495b", linewidth=2.5, markersize=7,
-                  label="Mean of simulated states 1–3")
+                  label="Simulated cross section")
+        difference_axis = axis.twinx()
+        difference_axis.plot(ENERGY_EV, percent_difference, "d-",
+                             color="#3c9d5d", linewidth=2, markersize=6,
+                             label="Percent difference")
+        difference_axis.axhline(0, color="#3c9d5d", linewidth=1, alpha=0.4)
+        difference_axis.set_ylim(0, 100)
         axis.set_yscale("log")
         axis.set_xlabel("Incident electron energy (eV)")
         axis.set_ylabel("Excitation cross section (cm²)")
-        axis.set_title("Beryllium excitation cross section")
+        difference_axis.set_ylabel("Percent difference (%)")
+        axis.set_title("BeI excitation cross section 1s2.2s2 (1S) → 1s2.2s2p (1P°)")
         axis.grid(True, which="both", alpha=0.28)
-        axis.legend()
+        lines, labels = axis.get_legend_handles_labels()
+        difference_lines, difference_labels = difference_axis.get_legend_handles_labels()
+        axis.legend(lines + difference_lines, labels + difference_labels)
         fig.tight_layout()
     output_path = output_dir / "be_cross_section_validation.png"
     fig.savefig(output_path, dpi=200)
@@ -91,21 +101,9 @@ def write_data(output_dir: Path = OUTPUT_DIR) -> Path:
     return output_path
 
 
-def write_averaged_data(output_dir: Path = OUTPUT_DIR) -> Path:
-    """Store the per-file mean of the extracted state 1–3 cross sections."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    energies, averages = load_average_state_cross_sections()
-    output_path = output_dir / "be_state_1_to_3_average_cross_sections.csv"
-    with output_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["energy_ev", "mean_sigma_cm2_states_1_to_3"])
-        writer.writerows(zip(energies, averages))
-    return output_path
-
-
-def build_plot() -> tuple[Path, Path, Path]:
+def build_plot() -> tuple[Path, Path]:
     """Write the data table and generated validation plot."""
-    return write_data(), write_averaged_data(), plot_cross_section()
+    return write_data(), plot_cross_section()
 
 
 if __name__ == "__main__":
