@@ -21,6 +21,7 @@ import json
 import itertools
 from typing import Dict, List, Tuple, Any, Optional, Union
 import numpy as np
+from src.conversion_constants import *
 
 # Single-qubit Pauli matrices in standard computational basis {|0>, |1>}
 PAULI_I = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=complex)
@@ -220,11 +221,11 @@ class MultiStatePauliMapper:
         self.species = manifold_data["species"]
         self.n_states = manifold_data["n_states"]
         self.n_qubits = get_n_qubits(self.n_states)
-        self.unphysical_penalty_ev = unphysical_penalty_ev
+        self.unphysical_penalty_au = unphysical_penalty_ev * EV_TO_HARTREE
 
         # 1. Unperturbed diagonal atomic Hamiltonian H_0 = diag(E_0, ..., E_{N-1})
-        energies_ev = np.array(manifold_data["excitation_energies_ev"], dtype=float)
-        self.H0_matrix = np.diag(energies_ev)
+        energies_au = np.array(manifold_data["energies_au"], dtype=float)
+        self.H0_matrix = np.diag(energies_au)
 
         # 2. Transition dipole matrices in atomic units (e * a_0)
         self.mux_matrix = np.array(manifold_data["dipole_matrix_x"], dtype=float)
@@ -240,7 +241,7 @@ class MultiStatePauliMapper:
         Pre-computes Pauli representations for H0, mux, muy, muz.
         """
         self.h0_coeffs, self.h0_paulis = decompose_matrix_to_paulis(
-            self.H0_matrix, n_qubits=self.n_qubits, unphysical_penalty=self.unphysical_penalty_ev
+            self.H0_matrix, n_qubits=self.n_qubits, unphysical_penalty=self.unphysical_penalty_au
         )
         self.mux_coeffs, self.mux_paulis = decompose_matrix_to_paulis(self.mux_matrix, n_qubits=self.n_qubits)
         self.muy_coeffs, self.muy_paulis = decompose_matrix_to_paulis(self.muy_matrix, n_qubits=self.n_qubits)
@@ -330,7 +331,7 @@ class MultiStatePauliMapper:
             f"Required Qubits (n): {self.n_qubits} (Hilbert dimension = {2**self.n_qubits})",
             f"Total Active Pauli Terms: {len(self.active_paulis)}",
             f"Active Pauli Strings: {', '.join(self.active_paulis)}",
-            f"Unphysical Energy Penalty: {self.unphysical_penalty_ev} eV",
+            f"Unphysical Energy Penalty: {self.unphysical_penalty_au} AU",
         ]
         return "\n".join(lines)
 
