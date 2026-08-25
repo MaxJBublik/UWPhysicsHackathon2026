@@ -33,11 +33,7 @@ from src.quantum.mapper import (
     reconstruct_matrix_from_paulis,
 )
 
-# Physical conversion factors (Atomic units: \hbar = m_e = e = 1)
-EV_TO_HARTREE = 1.0 / 27.211386245988
-HARTREE_TO_EV = 27.211386245988
-TIME_AU_TO_FEMTOSECONDS = 0.024188843265857
-
+from src.conversion_constants import *
 
 # ============================================================================
 # Section 1: Semiclassical Collision Electric Field Generator (Helper)
@@ -134,8 +130,8 @@ class PennyLaneTimeEvolution:
         using PennyLane parameterized Pauli rotation gates (qml.PauliRot).
         """
         qml = self.qml
-        # In a.u., Hamiltonian energy in eV must be converted to a.u. for time propagation
-        dt_scaled = dt_au * EV_TO_HARTREE
+        # Hamiltonian and time are both in atomic units
+        dt_scaled = dt_au
 
         for c, p_str in zip(coeffs, pauli_strings):
             if abs(c) < 1e-8:
@@ -245,7 +241,7 @@ def simulate_exact_unitary_evolution(
     """
     n_steps = len(t_grid_au)
     dt_au = t_grid_au[1] - t_grid_au[0] if n_steps > 1 else 0.1
-    dt_scaled = dt_au * EV_TO_HARTREE
+    dt_scaled = dt_au
     dim = 2 ** mapper.n_qubits
 
     # Statevector initialized to ground state |0...0>
@@ -256,13 +252,13 @@ def simulate_exact_unitary_evolution(
     populations[0, :] = np.abs(psi) ** 2
 
     for k in range(n_steps - 1):
-        # 1. Evaluate Hamiltonian at current time slice in eV
+        # 1. Evaluate Hamiltonian at current time slice in hartree
         coeffs_k, paulis_k = mapper.evaluate_hamiltonian_paulis_at_t(e_fields_au[k])
-        H_k_ev = reconstruct_matrix_from_paulis(coeffs_k.tolist(), paulis_k)
+        H_k_au = reconstruct_matrix_from_paulis(coeffs_k.tolist(), paulis_k)
 
         # 2. Diagonalize H_k for stable, exact unitary matrix exponentiation:
         # exp(-i * H * dt) = V * diag(exp(-i * lambda * dt)) * V^\dagger
-        eigenvalues, eigenvectors = np.linalg.eigh(H_k_ev)
+        eigenvalues, eigenvectors = np.linalg.eigh(H_k_au)
         
         # Convert eigenvalues to a.u. for time propagation
         phase_factors = np.exp(-1j * eigenvalues * dt_scaled)
