@@ -82,7 +82,7 @@ def run_full_pipeline(energy_ev: float = 50.0, manifold_dir: str | Path = "data/
     
     summary = analyzer.extract_electronic_structure_scaling()
     records = summary.get("scaling_records", [])
-
+    print(records)
     if not records:
         print("[!] No scaling records available to display.")
     else:
