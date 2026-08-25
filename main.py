@@ -58,7 +58,7 @@ def run_full_pipeline(energy_ev: float = 50.0):
         print(f"[+] All PySCF manifold files verified in {manifold_dir}/ (Found species: {found_species})")
     # 2. Quantum Time Evolution & Population Tracking
     print(f"\n[Step 2/4] Simulating Quantum Time Evolution & Population Dynamics (E={energy_ev} eV)...")
-    run_all_species_simulation(energy_ev=energy_ev)
+    run_all_species_simulation(energy_ev=energy_ev, input_dir="data/new_raw_pyscf")
 
     # 3. Integrate Cross-Sections & Branching Ratios
     print("\n[Step 3/4] Integrating Cross-Sections & Calculating Branching Ratios...")
