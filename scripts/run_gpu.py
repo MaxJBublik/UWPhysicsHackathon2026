@@ -39,7 +39,7 @@ from src.quantum.time_evolution_gpu import (  # noqa: E402
     gpu_is_available,
 )
 
-DEFAULT_ENERGIES = [15.0, 30.0, 50.0, 75.0, 100.0, 150.0]
+DEFAULT_ENERGIES = [i for i in range(1, 1001, 10)]
 
 
 def main() -> int:

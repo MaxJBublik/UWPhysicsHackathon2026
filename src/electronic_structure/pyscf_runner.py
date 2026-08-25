@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+<<<<<<< HEAD
+=======
+import warnings
+>>>>>>> main
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +22,37 @@ from src.electronic_structure.species_configs import SPECIES_CONFIGS, get_specie
 HARTREE_TO_EV = 27.211386245988
 BOHR_TO_ANGSTROM = 0.529177210903
 
+<<<<<<< HEAD
+=======
+REQUIRED_MANIFOLD_KEYS = {
+    "species",
+    "n_states",
+    "energies_au",
+    "energies_ev",
+    "dipole_matrix_x",
+    "dipole_matrix_y",
+    "dipole_matrix_z",
+    "charge",
+}
+
+
+def validate_manifold_file(file_path: Path) -> Dict[str, Any]:
+    """Assert that a JSON manifold file contains all required items for downstream calculations."""
+    try:
+        with file_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as err:
+        raise ValueError(f"Failed to parse manifold file '{file_path}': {err}") from err
+
+    missing_keys = REQUIRED_MANIFOLD_KEYS - set(data.keys())
+    if missing_keys:
+        raise AssertionError(
+            f"Manifold file '{file_path.name}' is missing required downstream fields: {sorted(missing_keys)}"
+        )
+
+    return data
+
+>>>>>>> main
 
 class MultiRootElectronicStructure:
     """Compute a small low-energy manifold for a Be-like atom or ion."""
@@ -159,10 +194,37 @@ class MultiRootElectronicStructure:
 
 
 def run_all_species(n_states: int = 4,
+<<<<<<< HEAD
                     output_dir: str | Path = "data/raw_pyscf", *,
                     basis: Optional[str] = None,
                     allow_mock: bool = True) -> List[str]:
     """Calculate and save all three supported species."""
+=======
+                    input_dir: Optional[str | Path] = None,
+                    output_dir: str | Path = "data/raw_pyscf", *,
+                    basis: Optional[str] = None,
+                    allow_mock: bool = True) -> List[str]:
+    """Validate input JSON files if input_dir is specified, otherwise generate objects via PySCF."""
+    if input_dir is not None:
+        
+        input_path = Path(input_dir)
+        if not input_path.exists() or not input_path.is_dir():
+            raise ValueError(f"Input directory '{input_dir}' does not exist or is not a directory.")
+
+        json_files = sorted(list(input_path.glob("*.json")))
+        if not json_files:
+            warnings.warn(f"Input directory '{input_dir}' is empty or contains no JSON files.", UserWarning)
+            return []
+
+        existing_paths = []
+        for file_path in json_files:
+
+            #validation of file contents
+            validate_manifold_file(file_path)
+            existing_paths.append(str(file_path))
+        
+        return existing_paths
+>>>>>>> main
     paths = []
     for species in SPECIES_CONFIGS:
         calculation = MultiRootElectronicStructure(
@@ -177,10 +239,15 @@ def _main() -> None:
     parser.add_argument("--species", default="Be", choices=[*SPECIES_CONFIGS, "all"])
     parser.add_argument("--n-states", type=int, default=4)
     parser.add_argument("--basis")
+<<<<<<< HEAD
+=======
+    parser.add_argument("--indir", help="Directory containing pre-existing JSON manifold files.")
+>>>>>>> main
     parser.add_argument("--outdir", default="data/raw_pyscf")
     parser.add_argument("--require-pyscf", action="store_true")
     args = parser.parse_args()
     if args.species == "all":
+<<<<<<< HEAD
         run_all_species(args.n_states, args.outdir, basis=args.basis,
                         allow_mock=not args.require_pyscf)
     else:
@@ -193,3 +260,23 @@ def _main() -> None:
 
 if __name__ == "__main__":
     _main()
+=======
+        run_all_species(args.n_states, input_dir=args.indir, output_dir=args.outdir,
+                        basis=args.basis, allow_mock=not args.require_pyscf)
+    else:
+        if args.indir is not None:
+            target_path = Path(args.indir) / f"manifold_{args.species}.json"
+            if not target_path.is_file():
+                target_path = Path(args.indir) / f"{args.species}.json"
+            validate_manifold_file(target_path)
+        else:
+            calculation = MultiRootElectronicStructure(
+                args.species, basis=args.basis, n_states=args.n_states,
+                allow_mock=not args.require_pyscf)
+            calculation.run_calculation()
+            calculation.save_json(args.outdir)
+
+
+if __name__ == "__main__":
+    _main()
+>>>>>>> main
