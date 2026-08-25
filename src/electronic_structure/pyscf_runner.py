@@ -52,7 +52,8 @@ class MultiRootElectronicStructure:
     """Compute a small low-energy manifold for a Be-like atom or ion."""
 
     def __init__(self, species_key: str, basis: Optional[str] = None,
-                 n_states: int = 4, *, allow_mock: bool = True,
+                 n_states: int = 4, *, ncas: Optional[int] = None,
+                 method: str = "casci", allow_mock: bool = True,
                  verbose: int = 0) -> None:
         if not isinstance(n_states, int) or n_states < 1:
             raise ValueError("n_states must be a positive integer")
@@ -60,6 +61,10 @@ class MultiRootElectronicStructure:
         self.species_key = species_key
         self.basis = basis or self.species_config["recommended_basis"]
         self.n_states = n_states
+        if method not in {"casci", "casscf"}:
+            raise ValueError("method must be 'casci' or 'casscf'")
+        self.ncas = ncas
+        self.method = method
         self.allow_mock = allow_mock
         self.verbose = verbose
         self.results: Optional[Dict[str, Any]] = None
@@ -67,7 +72,7 @@ class MultiRootElectronicStructure:
     def run_calculation(self) -> Dict[str, Any]:
         """Run RHF followed by multi-root active-space FCI (CASCI)."""
         try:
-            from pyscf import gto, mcscf, scf
+            from pyscf import fci, gto, mcscf, scf
         except ImportError:
             if not self.allow_mock:
                 raise RuntimeError(
@@ -91,16 +96,26 @@ class MultiRootElectronicStructure:
         if not mf.converged:
             raise RuntimeError(f"RHF failed to converge for {self.species_key}")
 
-        ncas = min(int(cfg["active_orbitals"]), mol.nao_nr())
+        ncas = self.ncas or int(cfg["active_orbitals"])
+        if ncas < 1 or ncas > mol.nao_nr():
+            raise ValueError(f"ncas must be between 1 and {mol.nao_nr()}")
         nelecas = int(cfg["active_electrons"])
         if nelecas > mol.nelectron or nelecas > 2 * ncas:
             raise ValueError("invalid active-space electron/orbital configuration")
-        cas = mcscf.CASCI(mf, ncas, nelecas)
+        cas = (mcscf.CASSCF(mf, ncas, nelecas) if self.method == "casscf"
+               else mcscf.CASCI(mf, ncas, nelecas))
+        cas.fcisolver = fci.direct_spin0.FCI(mol)
         cas.fcisolver.nroots = self.n_states
         cas.fcisolver.conv_tol = 1e-9
-        output = cas.kernel()
-        total_energies = np.atleast_1d(np.asarray(output[0], dtype=float))
-        ci_vectors = [output[2]] if total_energies.size == 1 else list(output[2])
+        if self.method == "casscf":
+            cas = cas.state_average_([1.0 / self.n_states] * self.n_states)
+            cas.kernel()
+            total_energies = np.asarray(cas.e_states, dtype=float)
+            ci_vectors = list(cas.ci)
+        else:
+            output = cas.kernel()
+            total_energies = np.atleast_1d(np.asarray(output[0], dtype=float))
+            ci_vectors = [output[2]] if total_energies.size == 1 else list(output[2])
         if total_energies.size != self.n_states:
             raise RuntimeError(
                 f"PySCF returned {total_energies.size} roots, expected {self.n_states}"
@@ -121,13 +136,23 @@ class MultiRootElectronicStructure:
                 dipoles[:, j, i] = value
 
         excitation_au = total_energies - total_energies[0]
+        oscillator_matrix = self._oscillator_matrix(excitation_au, dipoles)
         self.results = self._pack_results(
-            excitation_au, dipoles,
-            self._oscillator_strengths(excitation_au, dipoles),
+            excitation_au, dipoles, oscillator_matrix[0].tolist(),
             is_mock=False, total_energies_au=total_energies,
-            method="RHF/CASCI",
+            spin_2s=0, spin_multiplicity=1,
+            oscillator_strength_matrix=oscillator_matrix,
+            method=(f"RHF/SA-CASSCF({nelecas},{ncas}), singlet-only"
+                    if self.method == "casscf" else
+                    f"RHF/CASCI({nelecas},{ncas}), singlet-only"),
             active_space={"orbitals": ncas, "electrons": nelecas})
         return self.results
+
+    @staticmethod
+    def _oscillator_matrix(energies_au: np.ndarray,
+                           dipoles: np.ndarray) -> np.ndarray:
+        delta_e = energies_au[None, :] - energies_au[:, None]
+        return (2.0 / 3.0) * delta_e * np.sum(dipoles ** 2, axis=0)
 
     @staticmethod
     def _oscillator_strengths(energies_au: np.ndarray,
@@ -169,9 +194,11 @@ class MultiRootElectronicStructure:
         for i in range(self.n_states - 1):
             value = (1.8 / z_factor) * np.sqrt(i + 1) / (i + 2)
             dipoles[2, i, i + 1] = dipoles[2, i + 1, i] = value
+        oscillator_matrix = self._oscillator_matrix(energies_au, dipoles)
         return self._pack_results(
-            energies_au, dipoles,
-            self._oscillator_strengths(energies_au, dipoles), is_mock=True,
+            energies_au, dipoles, oscillator_matrix[0].tolist(), is_mock=True,
+            spin_2s=0, spin_multiplicity=1,
+            oscillator_strength_matrix=oscillator_matrix,
             method="scaled-development-manifold")
 
     def save_json(self, output_dir: str | Path = "data/raw_pyscf") -> str:
@@ -191,6 +218,8 @@ def run_all_species(n_states: int = 4,
                     input_dir: Optional[str | Path] = None,
                     output_dir: str | Path = "data/raw_pyscf", *,
                     basis: Optional[str] = None,
+                    ncas: Optional[int] = None,
+                    method: str = "casci",
                     allow_mock: bool = True) -> List[str]:
     """Validate input JSON files if input_dir is specified, otherwise generate objects via PySCF."""
     if input_dir is not None:
@@ -215,7 +244,8 @@ def run_all_species(n_states: int = 4,
     paths = []
     for species in SPECIES_CONFIGS:
         calculation = MultiRootElectronicStructure(
-            species, basis=basis, n_states=n_states, allow_mock=allow_mock)
+            species, basis=basis, n_states=n_states, ncas=ncas,
+            method=method, allow_mock=allow_mock)
         calculation.run_calculation()
         paths.append(calculation.save_json(output_dir))
     return paths
@@ -227,12 +257,26 @@ def _main() -> None:
     parser.add_argument("--n-states", type=int, default=4)
     parser.add_argument("--basis")
     parser.add_argument("--indir", help="Directory containing pre-existing JSON manifold files.")
+    parser.add_argument("--ncas", type=int)
+    parser.add_argument("--casscf", action="store_true",
+                        help="Use state-averaged CASSCF instead of CASCI")
+    parser.add_argument("--symmetry-resolved", action="store_true",
+                        help="Build the complete Be 1S/1P/1D manifold by D2h sector")
     parser.add_argument("--outdir", default="data/raw_pyscf")
     parser.add_argument("--require-pyscf", action="store_true")
     args = parser.parse_args()
+    if args.symmetry_resolved:
+        if args.species != "Be" or args.casscf:
+            parser.error("--symmetry-resolved currently requires Be CASCI")
+        from src.electronic_structure.be_symmetry_fci import calculate
+        output = Path(args.outdir) / "manifold_Be.json"
+        print(f"Wrote {calculate(output, basis=args.basis or 'cc-pvtz')}")
+        return
+    method = "casscf" if args.casscf else "casci"
     if args.species == "all":
         run_all_species(args.n_states, input_dir=args.indir, output_dir=args.outdir,
-                        basis=args.basis, allow_mock=not args.require_pyscf)
+                        basis=args.basis, ncas=args.ncas, method=method,
+                        allow_mock=not args.require_pyscf)
     else:
         if args.indir is not None:
             target_path = Path(args.indir) / f"manifold_{args.species}.json"
@@ -242,6 +286,7 @@ def _main() -> None:
         else:
             calculation = MultiRootElectronicStructure(
                 args.species, basis=args.basis, n_states=args.n_states,
+                ncas=args.ncas, method=method,
                 allow_mock=not args.require_pyscf)
             calculation.run_calculation()
             calculation.save_json(args.outdir)
