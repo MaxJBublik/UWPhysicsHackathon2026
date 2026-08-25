@@ -150,7 +150,7 @@ def calculate_cross_sections_and_branching_ratios(
         raise ValueError("No excited state_* probabilities found in processed data.")
 
     probability_matrix = np.column_stack(
-        [np.asarray(probability_map[key], dtype=float) for key in state_keys]
+        [np.asarray(probability_map[key], dtype=float) for key in excited_state_keys]
     )
 
     probability_matrix = np.clip(probability_matrix, 0.0, 1.0)

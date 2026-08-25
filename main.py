@@ -55,7 +55,7 @@ def run_full_pipeline(energy_ev: float = 50.0):
 
     processed_files = sorted(processed_dir.glob("populations_*.json"))
     for p_file in processed_files:
-        out_file = output_dir / p_file.name.replace("populations_", "cross_sections_")
+        out_file = cross_section_dir / p_file.name.replace("populations_", "cross_sections_")
         save_processed_circuit_cross_sections(p_file, out_file)
 
     print(f"[+] Computed and saved cross-sections for {len(processed_files)} sweep files.")
