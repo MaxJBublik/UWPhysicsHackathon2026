@@ -1,4 +1,6 @@
 {
+  "run_id": "populations_be_casscf_raw_E12eV",
+  "source_manifold": "be_casscf_raw.json",
   "species": "Be",
   "charge": 0,
   "n_states": 9,
