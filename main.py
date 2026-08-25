@@ -50,8 +50,8 @@ def run_full_pipeline(energy_ev: float = 50.0):
     # 3. Integrate Cross-Sections & Branching Ratios
     print("\n[Step 3/4] Integrating Cross-Sections & Calculating Branching Ratios...")
     processed_dir = Path("data/processed_circuits")
-    output_dir = Path("data/cross_sections")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    cross_section_dir = Path("data/cross_sections")
+    cross_section_dir.mkdir(parents=True, exist_ok=True)
 
     processed_files = sorted(processed_dir.glob("populations_*.json"))
     for p_file in processed_files:

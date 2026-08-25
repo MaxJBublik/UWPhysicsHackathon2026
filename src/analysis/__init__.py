@@ -1,6 +1,3 @@
-"""
-Analysis module for collision cross sections, branching ratios, and isoelectronic scaling laws.
-"""
 
 from src.analysis.cross_sections import (
     calculate_cross_sections_and_branching_ratios,

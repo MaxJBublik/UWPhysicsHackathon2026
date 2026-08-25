@@ -1,0 +1,70 @@
+{
+  "_description": "Experimental / recommended reference data for the Be isoelectronic sequence, used to validate the PySCF manifolds (Task 1.1.3) and the Z-scaling laws (Task 3.2).",
+  "_energy_units": "eV, relative to the 1s2.2s2 1S0 ground level",
+  "_retrieved": "2026-08-24",
+  "_sources": {
+    "NIST_ASD": "NIST Atomic Spectra Database, Levels Form, https://physics.nist.gov/asd (retrieved 2026-08-24 for Be I, C III, Fe XXIII)",
+    "NAHAR_ADNDT": "S. N. Nahar, fine-structure radiative transitions in C II and C III, https://www.astronomy.ohio-state.edu/nahar.1/papers/adndt-fjj-c2-c3.pdf",
+    "NIST_ASD_F": "NIST ASD recommended transition probabilities (standard tabulated value; not re-fetched in this session)"
+  },
+  "species": {
+    "Be": {
+      "spectrum": "Be I",
+      "atomic_number": 4,
+      "charge": 0,
+      "levels": {
+        "2s2p_3P_J0": {"energy_ev": 2.724963, "source": "NIST_ASD", "verified": true},
+        "2s2p_3P_J1": {"energy_ev": 2.7250394, "source": "NIST_ASD", "verified": true},
+        "2s2p_3P_J2": {"energy_ev": 2.725329, "source": "NIST_ASD", "verified": true},
+        "2s2p_1P_J1": {"energy_ev": 5.27744322, "source": "NIST_ASD", "verified": true}
+      },
+      "resonance_transition": {
+        "label": "2s2 1S0 - 2s2p 1P1",
+        "energy_ev": 5.27744322,
+        "wavelength_air_angstrom": 2348.61,
+        "oscillator_strength_f": 1.34,
+        "f_source": "NIST_ASD_F",
+        "f_verified": false
+      }
+    },
+    "C2+": {
+      "spectrum": "C III",
+      "atomic_number": 6,
+      "charge": 2,
+      "levels": {
+        "2s2p_3P_J0": {"energy_ev": 6.492688, "source": "NIST_ASD", "verified": true},
+        "2s2p_3P_J1": {"energy_ev": 6.495625, "source": "NIST_ASD", "verified": true},
+        "2s2p_3P_J2": {"energy_ev": 6.502613, "source": "NIST_ASD", "verified": true},
+        "2s2p_1P_J1": {"energy_ev": 12.690036, "source": "NIST_ASD", "verified": true}
+      },
+      "resonance_transition": {
+        "label": "2s2 1S0 - 2s2p 1P1",
+        "energy_ev": 12.690036,
+        "wavelength_vacuum_angstrom": 977.02,
+        "oscillator_strength_f": 0.767,
+        "f_source": "NAHAR_ADNDT",
+        "f_verified": true
+      }
+    },
+    "Fe22+": {
+      "spectrum": "Fe XXIII",
+      "atomic_number": 26,
+      "charge": 22,
+      "levels": {
+        "2s2p_3P_J0": {"energy_ev": 43.17, "source": "NIST_ASD", "verified": true},
+        "2s2p_3P_J1": {"energy_ev": 47.006, "source": "NIST_ASD", "verified": true},
+        "2s2p_3P_J2": {"energy_ev": 58.493, "source": "NIST_ASD", "verified": true},
+        "2s2p_1P_J1": {"energy_ev": 93.287, "source": "NIST_ASD", "verified": true}
+      },
+      "resonance_transition": {
+        "label": "2s2 1S0 - 2s2p 1P1",
+        "energy_ev": 93.287,
+        "wavelength_vacuum_angstrom": 132.85,
+        "oscillator_strength_f": null,
+        "f_source": null,
+        "f_verified": false,
+        "_note": "No recommended f-value could be retrieved from an open source in this session; dipole benchmarking for Fe22+ is therefore skipped."
+      }
+    }
+  }
+}
