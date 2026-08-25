@@ -11,6 +11,7 @@ Executes the complete end-to-end workflow:
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -34,15 +35,27 @@ def run_full_pipeline(energy_ev: float = 50.0):
 
     # 1. PySCF Electronic Structure
     print("\n[Step 1/4] Checking / Generating PySCF Electronic Structure Manifolds...")
-    manifold_dir = Path("data/raw_pyscf")
+    manifold_dir = Path("data/new_raw_pyscf")
     species_list = ["Be", "C2+", "Fe22+"]
-    all_exist = all((manifold_dir / f"manifold_{sp}.json").exists() for sp in species_list)
-    if not all_exist:
-        print("[*] Running multi-root electronic structure calculations for all species...")
-        run_all_species(n_states=4, output_dir=str(manifold_dir))
-    else:
-        print("[+] All PySCF manifold files verified in data/raw_pyscf/")
 
+    found_species = set()
+    if manifold_dir.exists():
+        for file_path in manifold_dir.glob("*.json"):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if "species" in data:
+                        found_species.add(data["species"])
+            except (json.JSONDecodeError, OSError):
+                continue  # Skip unreadable or corrupted JSON files
+
+    all_exist = set(species_list).issubset(found_species)
+    if not all_exist:
+        missing = set(species_list) - found_species
+        print(f"[*] Missing manifold(s) for {missing}. Running electronic structure calculations...")
+        run_all_species(n_states=4, output_dir=str(manifold_dir), input_dir="data/new_raw_pyscf")
+    else:
+        print(f"[+] All PySCF manifold files verified in {manifold_dir}/ (Found species: {found_species})")
     # 2. Quantum Time Evolution & Population Tracking
     print(f"\n[Step 2/4] Simulating Quantum Time Evolution & Population Dynamics (E={energy_ev} eV)...")
     run_all_species_simulation(energy_ev=energy_ev)
@@ -50,12 +63,12 @@ def run_full_pipeline(energy_ev: float = 50.0):
     # 3. Integrate Cross-Sections & Branching Ratios
     print("\n[Step 3/4] Integrating Cross-Sections & Calculating Branching Ratios...")
     processed_dir = Path("data/processed_circuits")
-    cross_section_dir = Path("data/cross_sections")
-    cross_section_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path("data/cross_sections")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     processed_files = sorted(processed_dir.glob("populations_*.json"))
     for p_file in processed_files:
-        out_file = cross_section_dir / p_file.name.replace("populations_", "cross_sections_")
+        out_file = output_dir / p_file.name.replace("populations_", "cross_sections_")
         save_processed_circuit_cross_sections(p_file, out_file)
 
     print(f"[+] Computed and saved cross-sections for {len(processed_files)} sweep files.")

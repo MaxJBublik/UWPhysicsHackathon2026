@@ -1,0 +1,50 @@
+[
+  {
+    "species": "Be",
+    "incident_energy_ev": 100.0,
+    "state_index": 1,
+    "state_label": "state_1",
+    "sigma_au": 1.219922375952627e-26,
+    "sigma_cm2": 3.416130581105313e-43,
+    "sigma_mb": 3.4161305811053126e-25,
+    "branching_ratio": 1.4621129980399951e-27,
+    "sigma_trapezoid_au": 1.2443718586117869e-26,
+    "integration_relative_error": 0.020041834743843842,
+    "integration_converged": true,
+    "impact_parameter_min_bohr": 0.5,
+    "impact_parameter_max_bohr": 10.0,
+    "total_excitation_sigma_mb": 233.64340414760932
+  },
+  {
+    "species": "Be",
+    "incident_energy_ev": 100.0,
+    "state_index": 2,
+    "state_label": "state_2",
+    "sigma_au": 1.3887185832081272e-35,
+    "sigma_cm2": 3.888808103008966e-52,
+    "sigma_mb": 3.888808103008966e-34,
+    "branching_ratio": 1.664420237839082e-36,
+    "sigma_trapezoid_au": 1.4914249547851844e-35,
+    "integration_relative_error": 1.0270637157705716e-06,
+    "integration_converged": true,
+    "impact_parameter_min_bohr": 0.5,
+    "impact_parameter_max_bohr": 10.0,
+    "total_excitation_sigma_mb": 233.64340414760932
+  },
+  {
+    "species": "Be",
+    "incident_energy_ev": 100.0,
+    "state_index": 3,
+    "state_label": "state_3",
+    "sigma_au": 8.343557424001895,
+    "sigma_cm2": 2.3364340414760933e-16,
+    "sigma_mb": 233.64340414760932,
+    "branching_ratio": 1.0,
+    "sigma_trapezoid_au": 8.320675061820017,
+    "integration_relative_error": 0.002742518690654982,
+    "integration_converged": true,
+    "impact_parameter_min_bohr": 0.5,
+    "impact_parameter_max_bohr": 10.0,
+    "total_excitation_sigma_mb": 233.64340414760932
+  }
+]
