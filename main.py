@@ -53,7 +53,7 @@ def run_full_pipeline(energy_ev: float = 50.0):
     if not all_exist:
         missing = set(species_list) - found_species
         print(f"[*] Missing manifold(s) for {missing}. Running electronic structure calculations...")
-        run_all_species(n_states=4, output_dir=str(manifold_dir), input_dir="data/new_raw_pyscf")
+        run_all_species(n_states=4, output_dir=str(manifold_dir))
     else:
         print(f"[+] All PySCF manifold files verified in {manifold_dir}/ (Found species: {found_species})")
     # 2. Quantum Time Evolution & Population Tracking

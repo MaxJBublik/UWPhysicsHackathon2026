@@ -29,10 +29,14 @@ import concurrent.futures
 from functools import partial
 
 
+
+
+
 from src.collision import (
     load_manifold,
     generate_trajectory,
     electric_field,
+    incident_velocity
 )
 
 from src.quantum.mapper import (
@@ -43,6 +47,40 @@ from src.quantum.mapper import (
 )
 
 from src.conversion_constants import *
+
+
+
+
+
+def configure_execution_mode(
+    n_states: int, 
+    requested_trotter: Optional[bool] = None,
+    requested_time_steps: Optional[int] = None
+) -> Tuple[bool, int]:
+    """
+    Determines whether to use PennyLane (Trotter) or exact matrix exponentials 
+    and sets TIME_STEPS based on the manifold size N.
+    """
+    # 1. Custom Trotter logic based on manifold size (Modify this logic as desired)
+    if requested_trotter is None:
+        # Example logic: Use exact matrix exponentials for small manifolds (N <= 4)
+        # and Trotterized quantum circuits for larger manifolds (N > 4)
+        use_trotter = n_states > 8
+    else:
+        use_trotter = requested_trotter
+
+    # 2. Custom TIME_STEPS logic based on execution mode & manifold size
+    if requested_time_steps is None:
+        if use_trotter:
+            # Trotter is heavier per step; use a leaner step count
+            TIME_STEPS = 200
+        else:
+            # Exact matrix math is fast; use higher resolution
+            TIME_STEPS = 2000 if n_states <= 4 else 1000
+    else:
+        TIME_STEPS = requested_time_steps
+
+    return use_trotter, TIME_STEPS
 
 # ============================================================================
 # Section 1: Semiclassical Collision Electric Field Generator (Helper)
