@@ -143,6 +143,30 @@ python main.py --energy 50.0
 4. Integrates cross-sections $\sigma(E)$ and calculates **Branching Ratios** $\mathcal{B}_{0 \to j}(E)$.
 5. Evaluates $Z$-scaling laws across incident energies $E \in [15, 150]\text{ eV}$ and saves publication figures in `data/scaling_analysis/isoelectronic_scaling_trends.png`.
 
+For direct control of the electronic-structure stage:
+
+```bash
+# Run for all species (Be, C 2+, Fe 22+)
+python -m src.electronic_structure.pyscf_runner --species all --n-states 4
+
+# Or run for a specific species
+python -m src.electronic_structure.pyscf_runner --species Be --n-states 6 --basis cc-pvdz
+
+# Spin-pure singlet SA-CASSCF with a custom active space
+python -m src.electronic_structure.pyscf_runner --species Be --n-states 9 \
+  --basis cc-pvtz --ncas 14 --casscf
+
+# Complete symmetry-resolved Be 1S + 1P + 1D manifold
+python -m src.electronic_structure.pyscf_runner --species Be \
+  --basis cc-pvtz --symmetry-resolved
+```
+
+The runner uses a singlet-adapted FCI solver. CASCI is the default; pass
+`--casscf` to optimize equal-weight state-averaged orbitals. Keep complete
+angular shells in a truncated atomic active space to avoid symmetry breaking.
+
+Results are saved as JSON files in `data/raw_pyscf/manifold_{species}.json`.
+
 ---
 
 ### 2. Launch the Interactive Web Dashboard (Streamlit GUI)
