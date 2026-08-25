@@ -21,6 +21,7 @@ import json
 import itertools
 from typing import Dict, List, Tuple, Any, Optional, Union
 import numpy as np
+from src.conversion_constants import *
 
 # Single-qubit Pauli matrices in standard computational basis {|0>, |1>}
 PAULI_I = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=complex)
@@ -212,18 +213,10 @@ class MultiStatePauliMapper:
         self.species = manifold_data.get("species", "Unknown")
         self.n_states = manifold_data.get("n_states", len(manifold_data.get("energies_au", [])))
         self.n_qubits = get_n_qubits(self.n_states)
-        
-        # 1. Convert penalty to atomic units (Hartree)
-        self.unphysical_penalty_au = unphysical_penalty_ev / HARTREE_TO_EV
+        self.unphysical_penalty_au = unphysical_penalty_ev * EV_TO_HARTREE
 
-        # 2. Robustly extract energies in Hartree
-        if "energies_au" in manifold_data:
-            energies_au = np.array(manifold_data["energies_au"], dtype=float)
-        elif "excitation_energies_ev" in manifold_data:
-            energies_au = np.array(manifold_data["excitation_energies_ev"], dtype=float) / HARTREE_TO_EV
-        else:
-            raise KeyError("Manifold data must contain 'energies_au' or 'excitation_energies_ev'.")
-
+        # 1. Unperturbed diagonal atomic Hamiltonian H_0 = diag(E_0, ..., E_{N-1})
+        energies_au = np.array(manifold_data["energies_au"], dtype=float)
         self.H0_matrix = np.diag(energies_au)
 
         # 3. Transition dipole matrices in atomic units
@@ -320,7 +313,7 @@ class MultiStatePauliMapper:
             f"Required Qubits (n): {self.n_qubits} (Hilbert dimension = {2**self.n_qubits})",
             f"Total Active Pauli Terms: {len(self.active_paulis)}",
             f"Active Pauli Strings: {', '.join(self.active_paulis)}",
-            f"Unphysical Energy Penalty: {self.unphysical_penalty_ev} eV",
+            f"Unphysical Energy Penalty: {self.unphysical_penalty_au} AU",
         ]
         return "\n".join(lines)
 

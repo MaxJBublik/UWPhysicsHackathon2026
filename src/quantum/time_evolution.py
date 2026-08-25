@@ -42,43 +42,70 @@ from src.quantum.mapper import (
     reconstruct_matrix_from_paulis,
 )
 
-from src.collision.trajectories import incident_velocity, TrajectoryResult
+from src.conversion_constants import *
 
-# Physical conversion factors (Atomic units: \hbar = m_e = e = 1)
-EV_TO_HARTREE = 1.0 / 27.211386245988
-HARTREE_TO_EV = 27.211386245988
-TIME_AU_TO_FEMTOSECONDS = 0.024188843265857
+# ============================================================================
+# Section 1: Semiclassical Collision Electric Field Generator (Helper)
+# ============================================================================
 
+def compute_collision_electric_field(
+    t_grid_au: np.ndarray,
+    impact_parameter_bohr: float,
+    incident_energy_ev: float,
+    ion_charge: int = 0,
+) -> np.ndarray:
+    r"""
+    Computes the time-dependent electric field vector \vec{\mathcal{E}}(t) in atomic units
+    produced at the atom's origin by a passing electron with impact parameter b
+    and incident kinetic energy E_inc:
+        v = \sqrt{2 * E_inc} (in a.u.)
+        \vec{R}(t) = (b, 0, v * t)
+        \vec{\mathcal{E}}(t) = -e * \vec{R}(t) / |\vec{R}(t)|^3
 
-def configure_execution_mode(
-    n_states: int, 
-    requested_trotter: Optional[bool] = None,
-    requested_time_steps: Optional[int] = None
-) -> Tuple[bool, int]:
+    Parameters:
+    -----------
+    t_grid_au : np.ndarray
+        Array of time points in atomic units (a.u.).
+    impact_parameter_bohr : float
+        Impact parameter b in Bohr radii (a_0).
+    incident_energy_ev : float
+        Incident electron kinetic energy in eV.
+    ion_charge : int
+        Target charge state (used for Coulomb acceleration correction).
+
+    Returns:
+    --------
+    e_fields : np.ndarray of shape (len(t_grid_au), 3)
+        Electric field vector (Ex, Ey, Ez) at each time step in a.u.
     """
-    Determines whether to use PennyLane (Trotter) or exact matrix exponentials 
-    and sets TIME_STEPS based on the manifold size N.
-    """
-    # 1. Custom Trotter logic based on manifold size (Modify this logic as desired)
-    if requested_trotter is None:
-        # Example logic: Use exact matrix exponentials for small manifolds (N <= 4)
-        # and Trotterized quantum circuits for larger manifolds (N > 4)
-        use_trotter = n_states > 8
-    else:
-        use_trotter = requested_trotter
+    # Electron velocity in atomic units: v = \sqrt{2 * E_kin (Hartree)}
+    e_kin_au = max(incident_energy_ev * EV_TO_HARTREE, 1e-4)
+    v_electron = np.sqrt(2.0 * e_kin_au)
 
-    # 2. Custom TIME_STEPS logic based on execution mode & manifold size
-    if requested_time_steps is None:
-        if use_trotter:
-            # Trotter is heavier per step; use a leaner step count
-            TIME_STEPS = 200
-        else:
-            # Exact matrix math is fast; use higher resolution
-            TIME_STEPS = 2000 if n_states <= 4 else 1000
-    else:
-        TIME_STEPS = requested_time_steps
+    # Coulomb acceleration / focusing correction for charged ions
+    # At distance r ~ b, effective kinetic energy is enhanced: E_eff ~ E_inc + q / b
+    if ion_charge > 0:
+        coulomb_enhancement = 1.0 + (float(ion_charge) / (max(impact_parameter_bohr, 0.5) * e_kin_au))
+        v_electron *= np.sqrt(coulomb_enhancement)
 
-    return use_trotter, TIME_STEPS
+    b = max(impact_parameter_bohr, 0.1)
+    n_pts = len(t_grid_au)
+    e_fields = np.zeros((n_pts, 3), dtype=float)
+
+    for idx, t in enumerate(t_grid_au):
+        # Straight-line trajectory along z with offset b along x
+        rx = b
+        ry = 0.0
+        rz = v_electron * t
+        r_mag = np.sqrt(rx ** 2 + ry ** 2 + rz ** 2)
+        r_cubed = r_mag ** 3
+
+        # Electric field on the atomic target: \vec{\mathcal{E}} = - \vec{R} / R^3
+        e_fields[idx, 0] = -rx / r_cubed
+        e_fields[idx, 1] = -ry / r_cubed
+        e_fields[idx, 2] = -rz / r_cubed
+
+    return e_fields
 
 
 # ============================================================================
@@ -115,7 +142,8 @@ class PennyLaneTimeEvolution:
         using PennyLane parameterized Pauli rotation gates (qml.PauliRot).
         """
         qml = self.qml
-        # In a.u., Hamiltonian energy in eV must be converted to a.u. for time propagation
+        # Hamiltonian and time are both in atomic units
+        dt_scaled = dt_au
 
         for c, p_str in zip(coeffs, pauli_strings):
             if abs(c) < 1e-8:
@@ -221,6 +249,7 @@ def simulate_exact_unitary_evolution(
     """
     n_steps = len(t_grid_au)
     dt_au = t_grid_au[1] - t_grid_au[0] if n_steps > 1 else 0.1
+    dt_scaled = dt_au
     dim = 2 ** mapper.n_qubits
 
     psi = np.zeros(dim, dtype=complex)
@@ -230,9 +259,12 @@ def simulate_exact_unitary_evolution(
     populations[0, :] = np.abs(psi) ** 2
 
     for k in range(n_steps - 1):
+        # 1. Evaluate Hamiltonian at current time slice in hartree
         coeffs_k, paulis_k = mapper.evaluate_hamiltonian_paulis_at_t(e_fields_au[k])
         H_k_au = reconstruct_matrix_from_paulis(coeffs_k.tolist(), paulis_k)
 
+        # 2. Diagonalize H_k for stable, exact unitary matrix exponentiation:
+        # exp(-i * H * dt) = V * diag(exp(-i * lambda * dt)) * V^\dagger
         eigenvalues, eigenvectors = np.linalg.eigh(H_k_au)
         
         # Propagate directly with dt_au (no EV_TO_HARTREE scaling)
